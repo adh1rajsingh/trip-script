@@ -1,50 +1,6 @@
 export default function Home() {
   return (
     <div className="min-h-screen">
-      {/* Navigation Bar */}
-      <nav className="navbar px-6 py-4 sticky top-0 z-50" style={{ backgroundColor: '#FFFFFF' }}>
-        <div className="max-w-7xl mx-auto flex justify-between items-center">
-          {/* Logo/Brand */}
-          <div className="flex items-center">
-            <h1 
-              className="text-xl md:text-2xl font-bold"
-              style={{ 
-                fontFamily: 'var(--font-poppins)', 
-                color: '#2C3E2C',
-                fontWeight: '700'
-              }}
-            >
-              TripScript
-            </h1>
-          </div>
-          
-          {/* Auth Buttons */}
-          <div className="flex items-center space-x-4">
-            <button 
-              className="px-4 py-2 text-sm font-medium rounded-md transition-all duration-200 hover:bg-gray-100"
-              style={{ 
-                color: '#2C3E2C',
-                fontFamily: 'var(--font-open-sans)',
-                fontWeight: '600'
-              }}
-            >
-              Login
-            </button>
-            <button 
-              className="px-4 py-2 text-sm font-medium rounded-md transition-all duration-200"
-              style={{ 
-                backgroundColor: '#FF6B35',
-                color: 'white',
-                fontFamily: 'var(--font-open-sans)',
-                fontWeight: '600'
-              }}
-            >
-              Sign Up
-            </button>
-          </div>
-        </div>
-      </nav>
-
       {/* Top Section - 60% of screen */}
       <section className="subtle-wave-bg min-h-[60vh] flex flex-col items-center justify-center px-8 py-12" style={{ backgroundColor: '#FDFDF9' }}>
         <div className="text-center space-y-6 max-w-4xl relative z-10">
