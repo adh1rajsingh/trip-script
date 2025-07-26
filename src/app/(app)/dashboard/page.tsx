@@ -22,7 +22,7 @@ export default async function Dashboard() {
           Dashboard
         </h1>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          <Link href="/mytrips" className="group">
+          <Link href="/trips" className="group">
             <div className="bg-white p-6 rounded-lg shadow-sm border hover:shadow-md hover:border-gray-300 transition-all duration-200 cursor-pointer group-hover:scale-105">
               <div className="flex items-center mb-2">
                 <svg className="w-6 h-6 text-blue-500 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -38,7 +38,7 @@ export default async function Dashboard() {
             </div>
           </Link>
           
-          <Link href="/newtrip" className="group">
+          <Link href="/trips/newtrip" className="group">
             <div className="bg-white p-6 rounded-lg shadow-sm border hover:shadow-md hover:border-gray-300 transition-all duration-200 cursor-pointer group-hover:scale-105">
               <div className="flex items-center mb-2">
                 <svg className="w-6 h-6 text-green-500 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">

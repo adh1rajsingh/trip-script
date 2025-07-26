@@ -40,13 +40,12 @@ export async function createTrip(formData: FormData) {
       startDate: startDate ? new Date(startDate) : null,
       endDate: endDate ? new Date(endDate) : null,
     }).returning(); 
-
-    console.log('Trip created successfully:', newTrip);
+    redirect('/trips/${newTrip.id}'); 
     
   } catch (error) {
     console.error("error in creating trip:", error);
     throw new Error('Failed to create trip');
   }
 
-  redirect('/createtrip'); 
+  
 }
