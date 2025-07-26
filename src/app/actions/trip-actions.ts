@@ -39,7 +39,7 @@ export async function createTrip(formData: FormData) {
       destination,
       startDate: startDate ? new Date(startDate) : null,
       endDate: endDate ? new Date(endDate) : null,
-    }).returning(); // Add .returning() to get the inserted record
+    }).returning(); 
 
     console.log('Trip created successfully:', newTrip);
     
@@ -48,5 +48,5 @@ export async function createTrip(formData: FormData) {
     throw new Error('Failed to create trip');
   }
 
-  redirect('/createtrip'); // Move redirect outside try-catch
+  redirect('/createtrip'); 
 }
