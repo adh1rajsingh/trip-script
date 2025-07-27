@@ -1,22 +1,22 @@
 "use client";
 
 import ItineraryDate from "@/components/ItineraryDate";
-import { trips } from "@/db/schema";
-import { useState } from "react";
+import { trips, itineraryItems } from "@/db/schema";
 
 interface CreateTripProps {
-  trip: typeof trips.$inferSelect;
+  trip: typeof trips.$inferSelect & {
+    itineraryItems: (typeof itineraryItems.$inferSelect)[];
+  };
 }
 
 function getDatesRange(startDate: Date, endDate: Date): Date[] {
   const dates = [];
 
-  let currentDate = new Date(
+  const currentDate = new Date(
     startDate.getFullYear(),
     startDate.getMonth(),
     startDate.getDate()
   );
-  console.log(currentDate);
 
   while (currentDate <= endDate) {
     dates.push(new Date(currentDate));
@@ -50,6 +50,20 @@ export default function CreateTrip({ trip }: CreateTripProps) {
     day: "numeric",
   });
 
+  const getPlacesForDate = (date: Date) => {
+    return trip.itineraryItems
+      .filter((item) => {
+        const itemDate = new Date(item.date);
+        return itemDate.toDateString() === date.toDateString();
+      })
+      .sort((a, b) => a.order - b.order)
+      .map((item) => ({
+        id: item.id,
+        name: item.name,
+        description: item.description,
+      }));
+  };
+
   return (
     <div className="max-w-4xl mx-auto py-12 px-4">
       <div className="mb-12">
@@ -58,7 +72,6 @@ export default function CreateTrip({ trip }: CreateTripProps) {
         </h1>
         <p className="text-lg text-gray-500">Your itinerary awaits ✨</p>
       </div>
-
 
       <div className="space-y-8">
         {itineraryDays.map((date) => {
@@ -73,6 +86,7 @@ export default function CreateTrip({ trip }: CreateTripProps) {
               dayName={dayName}
               month={month}
               dayNumber={parseInt(dayNumberStr)}
+              initialPlaces={getPlacesForDate(date)}
             />
           );
         })}

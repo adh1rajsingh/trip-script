@@ -1,11 +1,11 @@
 "use server";
 
-import { db } from "@/db";
-import { itineraryItems, trips, users } from "@/db/schema";
 import { auth } from "@clerk/nextjs/server";
-import { and, eq, max } from "drizzle-orm";
-import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { db } from "@/db";
+import { users, trips, itineraryItems } from "@/db/schema";
+import { eq } from "drizzle-orm";
+import { revalidatePath } from "next/cache";
 
 interface AddPlaceToItineraryParams {
   tripId: string;
@@ -72,20 +72,25 @@ export async function addPlaceToItinerary({
       };
     }
 
-    if (trip[0].userId != user[0].id) {
+    if (trip[0].userId !== user[0].id) {
       return {
         success: false,
         error: "No Authorization- Trip does not belong to the user",
       };
     }
-    const maxOrderResult = await db
-      .select({ value: max(itineraryItems.order) })
-      .from(itineraryItems)
-      .where(
-        and(eq(itineraryItems.tripId, tripId), eq(itineraryItems.date, date))
-      );
 
-    const maxOrder = maxOrderResult[0].value ?? -1;
+    const existingItems = await db
+      .select()
+      .from(itineraryItems)
+      .where(eq(itineraryItems.tripId, tripId));
+
+    const maxOrder = existingItems
+      .filter((item) => {
+        const itemDate = new Date(item.date);
+        const targetDate = new Date(date);
+        return itemDate.toDateString() === targetDate.toDateString();
+      })
+      .reduce((max, item) => Math.max(max, item.order), 0);
 
     const [newItineraryItem] = await db
       .insert(itineraryItems)
@@ -99,13 +104,14 @@ export async function addPlaceToItinerary({
       .returning();
 
     revalidatePath(`/trips/${tripId}`);
+    revalidatePath("/trips");
 
     return {
       success: true,
       placeId: newItineraryItem.id,
     };
   } catch (error) {
-    console.error("Error adding place to itinerary", error);
+    console.error("Error adding place to itinerary:", error);
     return {
       success: false,
       error: "Failed to add place to itinerary",

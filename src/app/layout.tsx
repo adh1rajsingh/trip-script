@@ -9,6 +9,7 @@ import {
   SignedOut,
   UserButton,
 } from "@clerk/nextjs";
+import Link from "next/link";
 
 const poppins = Poppins({
   variable: "--font-poppins",
@@ -42,23 +43,55 @@ export default function RootLayout({
           {/* Navigation Bar */}
           <nav className="navbar px-6 py-4 sticky top-0 z-50" style={{ backgroundColor: '#FFFFFF' }}>
             <div className="max-w-7xl mx-auto flex justify-between items-center">
-              {/* Logo/Brand */}
               <div className="flex items-center">
-                <h1 
-                  className="text-xl md:text-2xl font-bold"
-                  style={{ 
-                    fontFamily: 'var(--font-poppins)', 
-                    color: '#2C3E2C',
-                    fontWeight: '700'
-                  }}
-                >
-                  TripScript
-                </h1>
+                <Link href="/">
+                  <h1 
+                    className="text-xl md:text-2xl font-bold cursor-pointer hover:opacity-80 transition-opacity"
+                    style={{ 
+                      fontFamily: 'var(--font-poppins)', 
+                      color: '#2C3E2C',
+                      fontWeight: '700'
+                    }}
+                  >
+                    TripScript
+                  </h1>
+                </Link>
               </div>
               
-              {/* Auth Buttons */}
+              {/* Navigation and Auth Buttons */}
               <div className="flex items-center space-x-4">
+                {/* Dashboard/Get Started Button */}
+                <SignedIn>
+                  <Link href="/dashboard">
+                    <button
+                      className="px-4 py-2 text-sm font-medium rounded-md transition-all duration-200 hover:bg-gray-100"
+                      style={{
+                        color: "#2C3E2C",
+                        fontFamily: "var(--font-open-sans)",
+                        fontWeight: "600",
+                      }}
+                    >
+                      Dashboard
+                    </button>
+                  </Link>
+                </SignedIn>
+                
                 <SignedOut>
+                  <SignInButton 
+                    mode="redirect"
+                    forceRedirectUrl="/dashboard"
+                  >
+                    <button
+                      className="px-4 py-2 text-sm font-medium rounded-md transition-all duration-200 hover:bg-gray-100"
+                      style={{
+                        color: "#2C3E2C",
+                        fontFamily: "var(--font-open-sans)",
+                        fontWeight: "600",
+                      }}
+                    >
+                      Get Started
+                    </button>
+                  </SignInButton>
                   <SignInButton 
                     mode="redirect"
                     forceRedirectUrl="/dashboard"
@@ -91,6 +124,7 @@ export default function RootLayout({
                     </button>
                   </SignUpButton>
                 </SignedOut>
+                
                 <SignedIn>
                   <UserButton 
                     appearance={{
