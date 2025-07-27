@@ -3,6 +3,8 @@
 import { useState } from "react";
 import { addPlaceToItinerary } from "@/app/actions/addPlaceToItinerary";
 import { deletePlaceFromItinerary } from "@/app/actions/deletePlaceFromItinerary";
+import { Trash2 } from "lucide-react";
+
 
 interface ItineraryDateProps {
   tripId: string;
@@ -130,7 +132,7 @@ export default function ItineraryDate({
               {deletingPlaceId === place.id ? (
                 <div className="w-4 h-4 border-2 border-red-400 border-t-transparent rounded-full animate-spin"></div>
               ) : (
-                "🗑️"
+                <Trash2 />
               )}
             </button>
           </div>

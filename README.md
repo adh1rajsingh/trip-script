@@ -14,5 +14,6 @@
         - Update 3. Added itenaries to the schema and updated the relations
         - next -
 - [ ] create the actions for adding, deleting places.
+- [ ] add fucntionailty to delete the trips directly
 - [ ] bring in googel maps/mapbox to the page and connect it to show the initial page that the user gave
 - [ ] 
