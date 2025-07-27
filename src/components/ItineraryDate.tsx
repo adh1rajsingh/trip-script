@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { addPlaceToItinerary } from "@/app/actions/addPlaceToItinerary";
+import { deletePlaceFromItinerary } from "@/app/actions/deletePlaceFromItinerary";
 
 interface ItineraryDateProps {
   tripId: string;
@@ -32,6 +33,7 @@ export default function ItineraryDate({
   const [newPlaceDescription, setNewPlaceDescription] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [deletingPlaceId, setDeletingPlaceId] = useState<string | null>(null);
 
   const handleAddPlace = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -39,14 +41,6 @@ export default function ItineraryDate({
 
     setIsLoading(true);
     setError(null);
-    //call actions here
-    // const result = await addPlaceToItinerary({ tripId, date, name: newPlaceName });
-
-    //for testing
-    // const newPlaceFromServer: Place = {
-    //   id: Date.now().toString(),
-    //   name: newPlaceName.trim(),
-    // };
 
     try {
       const result = await addPlaceToItinerary({
@@ -78,11 +72,29 @@ export default function ItineraryDate({
     }
   };
 
-  const handleDeletePlace = (placeId: string) => {
-    //call server action to delete the place
-    // await deletePlaceFromItinerary(placeId);
+  const handleDeletePlace = async (placeId: string) => {
+    setDeletingPlaceId(placeId);
+    setError(null);
 
-    setPlaces((currentPlaces) => currentPlaces.filter((p) => p.id !== placeId));
+    try {
+      const result = await deletePlaceFromItinerary({
+        placeId,
+        tripId,
+      });
+
+      if (result.success) {
+        setPlaces((currentPlaces) =>
+          currentPlaces.filter((p) => p.id !== placeId)
+        );
+      } else {
+        setError(result.error || "Failed to delete place");
+      }
+    } catch (error) {
+      console.error("Error deleting place:", error);
+      setError("Failed to delete place");
+    } finally {
+      setDeletingPlaceId(null);
+    }
   };
 
   return (
@@ -111,10 +123,15 @@ export default function ItineraryDate({
             <button
               type="button"
               onClick={() => handleDeletePlace(place.id)}
-              className="p-2 hover:bg-red-50 rounded text-red-400"
+              disabled={deletingPlaceId === place.id}
+              className="p-2 hover:bg-red-50 rounded text-red-400 disabled:opacity-50 disabled:cursor-not-allowed"
               title="Delete place"
             >
-              🗑️
+              {deletingPlaceId === place.id ? (
+                <div className="w-4 h-4 border-2 border-red-400 border-t-transparent rounded-full animate-spin"></div>
+              ) : (
+                "🗑️"
+              )}
             </button>
           </div>
         ))}
