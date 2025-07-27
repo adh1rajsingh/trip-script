@@ -1,6 +1,6 @@
 import { auth } from '@clerk/nextjs/server'
 import { redirect } from 'next/navigation'
-import { createTrip } from '@/app/actions/trip-actions'
+import { createTrip } from '@/app/actions/tripActions'
 
 export default async function NewTrip() {
     const { userId } = await auth()

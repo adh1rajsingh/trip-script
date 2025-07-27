@@ -21,7 +21,7 @@ export async function createTrip(formData: FormData) {
     throw new Error("Destination is required");
   }
 
-  //find if user in db, and create a trip for that user
+  let newTrip;
 
   try {
     const user = await db
@@ -34,18 +34,17 @@ export async function createTrip(formData: FormData) {
       throw new Error("user not found in db");
     }
 
-    const [newTrip] = await db.insert(trips).values({
+    [newTrip] = await db.insert(trips).values({
       userId: user[0].id,
       destination,
       startDate: startDate ? new Date(startDate) : null,
       endDate: endDate ? new Date(endDate) : null,
     }).returning(); 
-    redirect('/trips/${newTrip.id}'); 
-    
+
   } catch (error) {
     console.error("error in creating trip:", error);
     throw new Error('Failed to create trip');
   }
 
-  
+  redirect(`/trips/${newTrip.id}`); 
 }
