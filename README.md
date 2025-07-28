@@ -6,7 +6,7 @@ A modern trip planning application built with Next.js that helps users discover,
 
 - [**Live Site**](https://trip-script.adh1raj.me/)
 
-> **Note**: Most of the UI (Tailwind) and some React stuff was done by my good friend Claude. It also helped me in many small bits and pieces in structuring and understanding Next.js and also in writing thise Readme. My goal was to finish a full-stack project and deploy it to submit to the Boot.dev hackathon and practice the backend skills I learned at Boot.dev, so I mainly worked on the backend with the goal to learn Next.js and practiced some React though. This project is very much incomplete from my vision, and I will constantly be working on it to make it better. I Hope you like it!
+> **Note**: Most of the UI (Tailwind) and some React stuff was done by my good friend Claude. It also helped me in many small bits and pieces in structuring and understanding Next.js and also in writing this Readme. My goal was to finish a full-stack project and deploy it to submit to the Boot.dev hackathon and practice the backend skills I learned at Boot.dev, so I mainly worked on the backend with the goal to learn Next.js and also practiced some React. This project is very much incomplete from my vision, and I will constantly be working on it to make it better. I Hope you like it!
 
 ## Features
 
@@ -17,7 +17,7 @@ A modern trip planning application built with Next.js that helps users discover,
 - **Responsive Design**: Beautiful, mobile-friendly interface
 - **Real-time Updates**: Instant UI updates when managing trip data
 
-## 🛠️ Tech Stack
+## Tech Stack
 
 - **Frontend**: Next.js 14, React, TypeScript, Tailwind CSS
 - **Backend**: Next.js API Routes, Server Actions
