@@ -6,7 +6,13 @@ A modern trip planning application built with Next.js that helps users discover,
 
 - [**Live Site**](https://trip-script.adh1raj.me/)
 
-> **Note**: Most of the UI (Tailwind) and some React stuff was done by my good friend Claude. It also helped me in many small bits and pieces in structuring and understanding Next.js and also in writing this Readme. My goal was to finish a full-stack project and deploy it to submit to the Boot.dev hackathon and practice the backend skills I learned at Boot.dev, so I mainly worked on the backend with the goal to learn Next.js and also practiced some React. This project is very much incomplete from my vision, and I will constantly be working on it to make it better. I Hope you like it!
+## Demo Video
+
+[![TripScript Demo](https://res.cloudinary.com/dskj7wqn8/image/upload/v1753674969/Your_Trips_mbg999.png)](https://res.cloudinary.com/dskj7wqn8/video/upload/v1753674790/My_Movie_bk8b2n.mp4)
+
+*Click the image above to watch the demo video*
+
+> **Note**: My goal was to finish a full-stack project and deploy it to submit to the Boot.dev hackathon and practice the backend skills I learned at Boot.dev, so I mainly worked on the backend with the goal to learn Nextjs and also practice React. The UI (Tailwind) and some React stuff was done by my good friend Claude. It also helped me in many small bits and pieces in structuring and understanding Next.js. This project is very much incomplete from my vision, and I will constantly be working on it to make it better. I Hope you like it!
 
 ## Features
 
