@@ -19,7 +19,6 @@ export async function POST(req: Request) {
     return new Response("Missing webhook secret", { status: 500 });
   }
 
-  // Get headers
   const headerPayload = await headers();
   const svix_id = headerPayload.get("svix-id");
   const svix_timestamp = headerPayload.get("svix-timestamp");
