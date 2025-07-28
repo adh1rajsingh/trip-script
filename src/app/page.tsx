@@ -95,18 +95,25 @@ export default function Home() {
 
           <div className="w-full max-w-4xl mx-auto">
             <div
-              className="bg-white border-2 border-dashed border-gray-300 rounded-lg flex items-center justify-center text-gray-500 font-medium shadow-sm"
+              className="bg-black rounded-lg overflow-hidden shadow-lg"
               style={{
                 aspectRatio: "16 / 9",
-                fontFamily: "var(--font-open-sans)",
               }}
             >
-              <div className="text-center">
-                <div className="text-lg md:text-xl mb-2">🎬</div>
-                <div className="text-sm md:text-base">
-                  [DEMO VIDEO/INTERACTIVE AREA - 16:9 Aspect Ratio]
-                </div>
-              </div>
+              <video
+                width="100%"
+                height="100%"
+                controls
+                preload="metadata"
+                poster="https://res.cloudinary.com/dskj7wqn8/image/upload/v1753674969/Your_Trips_mbg999.png"
+                className="w-full h-full object-cover"
+              >
+                <source
+                  src="https://res.cloudinary.com/dskj7wqn8/video/upload/v1753674790/My_Movie_bk8b2n.mp4"
+                  type="video/mp4"
+                />
+                Your browser does not support the video tag.
+              </video>
             </div>
           </div>
 
