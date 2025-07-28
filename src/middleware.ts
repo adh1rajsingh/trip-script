@@ -7,15 +7,16 @@ const isProtectedRoute = createRouteMatcher([
   '/settings(.*)'
 ])
 
-export default clerkMiddleware(async (auth, req) => {
-  if (isProtectedRoute(req)) {
-    const session = await auth();
-    if (!session.isAuthenticated) {
-      return Response.redirect('/');
+export default clerkMiddleware(
+  (auth, req) => {
+    if (isProtectedRoute(req)) {
+      auth.protect();
     }
+  },
+  {
+    proxyUrl: 'https://clerk.adh1raj.me',
   }
-  
-})
+);
 
 export const config = {
   matcher: [
