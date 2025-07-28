@@ -44,7 +44,7 @@ export default function RootLayout({
           <nav className="navbar px-6 py-4 sticky top-0 z-50" style={{ backgroundColor: '#FFFFFF' }}>
             <div className="max-w-7xl mx-auto flex justify-between items-center">
               <div className="flex items-center">
-                <Link href="/">
+                <Link href="/dashboard">
                   <h1 
                     className="text-xl md:text-2xl font-bold cursor-pointer hover:opacity-80 transition-opacity"
                     style={{ 
