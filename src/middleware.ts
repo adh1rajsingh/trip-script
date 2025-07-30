@@ -14,7 +14,7 @@ export default clerkMiddleware(
     }
   },
   {
-    proxyUrl: 'https://clerk.adh1raj.me',
+    proxyUrl: 'https://clerk.adhiraj.app',
   }
 );
 
