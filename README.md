@@ -4,7 +4,7 @@ A modern trip planning application built with Next.js that helps users discover,
 
 ## Live Demo
 
-- [**Live Site**](https://trip-script.adh1raj.me/)
+- [**Live Site**](https://trip-script.adhiraj.app/)
 
 ## Demo Video
 
