@@ -1,9 +1,17 @@
 "use client";
 
 import ItineraryDate from "@/components/ItineraryDate";
-import TripMap, { MapPoint } from "@/components/TripMap";
+import dynamic from "next/dynamic";
+// Removed type import from TripMap to avoid loading Leaflet on server
 import { trips, itineraryItems } from "@/db/schema";
-import { useMemo, useState } from "react";
+import { useMemo, useState, useTransition } from "react";
+import { updateTrip } from "@/app/actions/updateTrip";
+import { toggleShareTrip } from "@/app/actions/toggleShare";
+import { useToast } from "@/components/ui/toast";
+
+const TripMap = dynamic(() => import("@/components/TripMap"), { ssr: false });
+
+type MapPoint = { id: string; name: string; lat: number; lng: number; address?: string | null };
 
 interface CreateTripProps {
   trip: typeof trips.$inferSelect & {
@@ -29,6 +37,47 @@ function getDatesRange(startDate: Date, endDate: Date): Date[] {
 
 export default function CreateTrip({ trip }: CreateTripProps) {
   const hasDates = Boolean(trip.startDate && trip.endDate);
+  const { showToast } = useToast();
+  const [isSaving, startTransition] = useTransition();
+  const [editing, setEditing] = useState(false);
+  const [form, setForm] = useState({
+    destination: trip.destination,
+    startDate: trip.startDate ? new Date(trip.startDate).toISOString().slice(0, 10) : "",
+    endDate: trip.endDate ? new Date(trip.endDate).toISOString().slice(0, 10) : "",
+  });
+  const [sharing, startShareTransition] = useTransition();
+  const [isPublic, setIsPublic] = useState<boolean>(trip.isPublic ?? false);
+  const [shareUrl, setShareUrl] = useState<string | null>(trip.isPublic && trip.shareId ? `/share/${trip.shareId}` : null);
+
+  const onSaveTripMeta = () => {
+    startTransition(async () => {
+      const res = await updateTrip({
+        tripId: trip.id,
+        destination: form.destination,
+        startDate: form.startDate || null,
+        endDate: form.endDate || null,
+      });
+      if (res.success) {
+        showToast({ title: "Trip updated", variant: "success" });
+        setEditing(false);
+      } else {
+        showToast({ title: "Failed to update trip", description: res.error, variant: "error" });
+      }
+    });
+  };
+
+  const onToggleShare = (next: boolean) => {
+    startShareTransition(async () => {
+      const res = await toggleShareTrip({ tripId: trip.id, makePublic: next });
+      if (res.success) {
+        setIsPublic(res.isPublic ?? false);
+        setShareUrl(res.shareUrl ?? null);
+        showToast({ title: next ? "Trip is public" : "Trip is private", variant: "success" });
+      } else {
+        showToast({ title: "Failed to update sharing", description: res.error, variant: "error" });
+      }
+    });
+  };
 
   const itineraryDays = hasDates
     ? getDatesRange(new Date(trip.startDate!), new Date(trip.endDate!))
@@ -58,16 +107,52 @@ export default function CreateTrip({ trip }: CreateTripProps) {
   };
 
   const initialMapPoints: MapPoint[] = useMemo(() => {
+    // Build a mapping from ISO date -> dayIndex
+    const dayMap = new Map<string, number>();
+    if (hasDates) {
+      const days = getDatesRange(new Date(trip.startDate!), new Date(trip.endDate!));
+      days.forEach((d, idx) => dayMap.set(d.toDateString(), idx));
+    }
     return trip.itineraryItems
       .filter((i) => i.latitude != null && i.longitude != null)
-      .map((i) => ({ id: i.id, name: i.name, lat: i.latitude as number, lng: i.longitude as number, address: i.address }));
-  }, [trip.itineraryItems]);
+      .map((i) => {
+        const d = new Date(i.date);
+        const dayIndex = dayMap.get(d.toDateString());
+        return {
+          id: i.id,
+          name: i.name,
+          lat: i.latitude as number,
+          lng: i.longitude as number,
+          address: i.address,
+          dayIndex: dayIndex,
+          order: i.order ?? undefined,
+        } as MapPoint;
+      });
+  }, [trip.itineraryItems, hasDates, trip.startDate, trip.endDate]);
 
   const [points, setPoints] = useState<MapPoint[]>(initialMapPoints);
 
-  const handlePlaceAddedToMap = (p: { id: string; name: string; latitude?: number | null; longitude?: number | null; address?: string | null; }) => {
+  const handlePlaceAddedToMap = (p: { id: string; name: string; latitude?: number | null; longitude?: number | null; address?: string | null; date?: Date | string; order?: number; }) => {
     if (p.latitude != null && p.longitude != null) {
-      setPoints((prev) => [...prev, { id: p.id, name: p.name, lat: p.latitude!, lng: p.longitude!, address: p.address ?? undefined }]);
+      let dayIndex: number | undefined = undefined;
+      if (hasDates && p.date) {
+        const days = getDatesRange(new Date(trip.startDate!), new Date(trip.endDate!));
+        const d = new Date(p.date);
+        const idx = days.findIndex((day) => day.toDateString() === d.toDateString());
+        if (idx !== -1) dayIndex = idx;
+      }
+      setPoints((prev) => [
+        ...prev,
+        {
+          id: p.id,
+          name: p.name,
+          lat: p.latitude!,
+          lng: p.longitude!,
+          address: p.address ?? undefined,
+          dayIndex,
+          order: p.order,
+        },
+      ]);
     }
   };
 
@@ -94,10 +179,61 @@ export default function CreateTrip({ trip }: CreateTripProps) {
   return (
     <div className="max-w-6xl mx-auto py-12 px-4">
       <div className="mb-6">
-        <h1 className="text-4xl font-bold text-gray-900 mb-2">
-          {trip.destination}
-        </h1>
-        <p className="text-lg text-gray-500">Your itinerary awaits ✨</p>
+        {editing ? (
+          <div className="bg-white border rounded-lg p-4 flex flex-col gap-3">
+            <input
+              value={form.destination}
+              onChange={(e) => setForm((f) => ({ ...f, destination: e.target.value }))}
+              className="text-2xl font-bold text-gray-900 outline-none"
+            />
+            <div className="flex gap-3 items-center">
+              <label className="text-sm text-gray-600">Start</label>
+              <input
+                type="date"
+                value={form.startDate}
+                onChange={(e) => setForm((f) => ({ ...f, startDate: e.target.value }))}
+                className="border rounded px-2 py-1"
+              />
+              <label className="text-sm text-gray-600">End</label>
+              <input
+                type="date"
+                value={form.endDate}
+                onChange={(e) => setForm((f) => ({ ...f, endDate: e.target.value }))}
+                className="border rounded px-2 py-1"
+              />
+              <div className="ml-auto flex gap-2">
+                <button onClick={() => setEditing(false)} className="px-3 py-2 rounded border">Cancel</button>
+                <button onClick={onSaveTripMeta} disabled={isSaving} className="px-3 py-2 rounded bg-blue-600 text-white disabled:opacity-50">{isSaving ? "Saving..." : "Save"}</button>
+              </div>
+            </div>
+          </div>
+        ) : (
+          <div className="flex items-center gap-3">
+            <h1 className="text-4xl font-bold text-gray-900 mb-2">
+              {trip.destination}
+            </h1>
+            <button onClick={() => setEditing(true)} className="text-sm px-3 py-2 rounded border">Edit</button>
+          </div>
+        )}
+        {!editing && <p className="text-lg text-gray-500">Your itinerary awaits ✨</p>}
+        <div className="mt-3 flex items-center gap-3">
+          <label className="inline-flex items-center gap-2 text-sm">
+            <input type="checkbox" checked={isPublic} onChange={(e) => onToggleShare(e.target.checked)} disabled={sharing} />
+            Share publicly
+          </label>
+          {isPublic && shareUrl && (
+            <button
+              type="button"
+              onClick={() => {
+                navigator.clipboard.writeText(`${window.location.origin}${shareUrl}`);
+                showToast({ title: "Link copied", variant: "success" });
+              }}
+              className="text-sm px-3 py-1 rounded border"
+            >
+              Copy link
+            </button>
+          )}
+        </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-5 gap-8 items-start">
@@ -123,7 +259,9 @@ export default function CreateTrip({ trip }: CreateTripProps) {
         </div>
 
         <div className="md:col-span-2">
-          <TripMap points={points} center={mapCenter} />
+          <div className="sticky top-20">
+            <TripMap points={points} center={mapCenter} height="calc(100vh - 6rem)" />
+          </div>
         </div>
       </div>
     </div>

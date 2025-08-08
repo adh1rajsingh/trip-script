@@ -1,5 +1,5 @@
 import { relations } from "drizzle-orm";
-import { doublePrecision, integer, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
+import { doublePrecision, integer, pgTable, text, timestamp, uuid, boolean } from "drizzle-orm/pg-core";
 
 export const users = pgTable('users', {
   id: uuid('id').primaryKey().defaultRandom(),
@@ -22,6 +22,9 @@ export const trips = pgTable('trips', {
   destination: text('destination').notNull(),
   startDate: timestamp('start_date'),
   endDate: timestamp('end_date'),
+  // Sharing fields
+  isPublic: boolean('is_public').notNull().default(false),
+  shareId: uuid('share_id').unique(),
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
 })

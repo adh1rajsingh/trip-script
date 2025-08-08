@@ -9,6 +9,10 @@ const isProtectedRoute = createRouteMatcher([
 
 export default clerkMiddleware(
   (auth, req) => {
+    // Skip protection for public share pages
+    if (req.nextUrl.pathname.startsWith('/share/')) {
+      return;
+    }
     if (isProtectedRoute(req)) {
       auth.protect();
     }

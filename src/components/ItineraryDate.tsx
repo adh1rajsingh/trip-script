@@ -1,9 +1,26 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { addPlaceToItinerary } from "@/app/actions/addPlaceToItinerary";
 import { deletePlaceFromItinerary } from "@/app/actions/deletePlaceFromItinerary";
+import { updateItineraryOrder } from "@/app/actions/updateItineraryOrder";
 import { Trash2, MapPin } from "lucide-react";
+import { useToast } from "@/components/ui/toast";
+import {
+  DndContext,
+  closestCenter,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  DragEndEvent,
+} from "@dnd-kit/core";
+import {
+  SortableContext,
+  arrayMove,
+  verticalListSortingStrategy,
+  useSortable,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 
 
 interface ItineraryDateProps {
@@ -13,8 +30,9 @@ interface ItineraryDateProps {
   month: string;
   dayNumber: number;
   initialPlaces?: Place[];
-  onPlaceAdded?: (place: Place) => void;
+  onPlaceAdded?: (place: Place & { date?: Date; order?: number }) => void;
   onPlaceDeleted?: (placeId: string) => void;
+  onReorder?: (placeIdsInOrder: string[]) => void;
 }
 
 interface Place {
@@ -26,6 +44,20 @@ interface Place {
   address?: string | null;
 }
 
+function SortableItem({ id, children }: { id: string; children: React.ReactNode }) {
+  const { attributes, listeners, setNodeRef, transform, transition } = useSortable({ id });
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+  } as React.CSSProperties;
+
+  return (
+    <div ref={setNodeRef} style={style} {...attributes} {...listeners}>
+      {children}
+    </div>
+  );
+}
+
 export default function ItineraryDate({
   tripId,
   date,
@@ -35,6 +67,7 @@ export default function ItineraryDate({
   initialPlaces = [],
   onPlaceAdded,
   onPlaceDeleted,
+  onReorder,
 }: ItineraryDateProps) {
   const [places, setPlaces] = useState<Place[]>(initialPlaces);
   const [isAddingPlace, setIsAddingPlace] = useState(false);
@@ -49,6 +82,10 @@ export default function ItineraryDate({
   const [searchResults, setSearchResults] = useState<Array<{ display_name: string; lat: string; lon: string }> | null>(null);
   const [isSearching, setIsSearching] = useState(false);
   const [picked, setPicked] = useState<{ lat: number; lon: number; address: string } | null>(null);
+  const descInputRef = useRef<HTMLInputElement | null>(null);
+  const searchControllerRef = useRef<AbortController | null>(null);
+
+  const { showToast } = useToast();
 
   const handleAddPlace = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -96,19 +133,27 @@ export default function ItineraryDate({
         };
 
         setPlaces((currentPlaces) => [...currentPlaces, newPlace]);
-        onPlaceAdded?.(newPlace);
+        onPlaceAdded?.({ ...newPlace, date, order: places.length });
         setNewPlaceName("");
         setNewPlaceDescription("");
         setIsAddingPlace(false);
         setSearchResults(null);
         setSearchQuery("");
         setPicked(null);
+
+        showToast({
+          title: "Place added",
+          description: `${newPlace.name} added to your itinerary`,
+          variant: "success",
+        });
       } else {
         setError(result.error || "Failed to add place");
+        showToast({ title: "Failed to add place", description: result.error || undefined, variant: "error" });
       }
     } catch (error) {
       console.error("error adding the place", error);
       setError("failed to add place");
+      showToast({ title: "Failed to add place", description: "Unexpected error", variant: "error" });
     } finally {
       setIsLoading(false);
     }
@@ -125,43 +170,101 @@ export default function ItineraryDate({
       });
 
       if (result.success) {
-        setPlaces((currentPlaces) => currentPlaces.filter((p) => p.id !== placeId));
+        setPlaces((currentPlaces) =>
+          currentPlaces.filter((p) => p.id !== placeId)
+        );
         onPlaceDeleted?.(placeId);
+        showToast({ title: "Place removed", variant: "success" });
       } else {
         setError(result.error || "Failed to delete place");
+        showToast({ title: "Failed to delete place", description: result.error || undefined, variant: "error" });
       }
     } catch (error) {
       console.error("Error deleting place:", error);
       setError("Failed to delete place");
+      showToast({ title: "Failed to delete place", description: "Unexpected error", variant: "error" });
     } finally {
       setDeletingPlaceId(null);
     }
   };
 
+  // Debounced search-as-you-type (works for both top search and add form input)
+  useEffect(() => {
+    const q = (isAddingPlace ? newPlaceName : searchQuery).trim();
+    // Avoid searching when a place has been picked in add form until cleared
+    if (isAddingPlace && picked) return;
+    if (q.length < 3) {
+      setSearchResults(null);
+      return;
+    }
+    const timer = setTimeout(async () => {
+      try {
+        if (searchControllerRef.current) {
+          searchControllerRef.current.abort();
+        }
+        const controller = new AbortController();
+        searchControllerRef.current = controller;
+        setIsSearching(true);
+        const url = new URL("https://nominatim.openstreetmap.org/search");
+        url.searchParams.set("q", q);
+        url.searchParams.set("format", "json");
+        url.searchParams.set("addressdetails", "1");
+        url.searchParams.set("limit", "5");
+        const res = await fetch(url.toString(), {
+          headers: { Accept: "application/json" },
+          signal: controller.signal,
+        });
+        if (!res.ok) throw new Error("search failed");
+        const data = await res.json();
+        setSearchResults(data);
+      } catch (e: unknown) {
+        if (e instanceof DOMException && e.name === "AbortError") {
+          // ignored
+        } else {
+          console.error(e);
+        }
+      } finally {
+        setIsSearching(false);
+      }
+    }, 500);
+    return () => {
+      clearTimeout(timer);
+    };
+  }, [isAddingPlace, newPlaceName, searchQuery, picked]);
+
+  // Immediate search trigger for buttons/Enter key
   const searchPlaces = async () => {
-    const query = searchQuery.trim() || newPlaceName.trim();
-    if (!query) return;
-    setIsSearching(true);
-    setError(null);
+    const q = (isAddingPlace ? newPlaceName : searchQuery).trim();
+    if (isAddingPlace && picked) return;
+    if (q.length < 3) {
+      setSearchResults(null);
+      return;
+    }
     try {
-      // Use Nominatim (OpenStreetMap) for free geocoding. Be mindful of rate limits.
+      if (searchControllerRef.current) {
+        searchControllerRef.current.abort();
+      }
+      const controller = new AbortController();
+      searchControllerRef.current = controller;
+      setIsSearching(true);
       const url = new URL("https://nominatim.openstreetmap.org/search");
-      url.searchParams.set("q", query);
+      url.searchParams.set("q", q);
       url.searchParams.set("format", "json");
       url.searchParams.set("addressdetails", "1");
       url.searchParams.set("limit", "5");
-
       const res = await fetch(url.toString(), {
-        headers: {
-          Accept: "application/json",
-          "User-Agent": "TripScript/1.0 (demo)",
-        },
+        headers: { Accept: "application/json" },
+        signal: controller.signal,
       });
+      if (!res.ok) throw new Error("search failed");
       const data = await res.json();
       setSearchResults(data);
-    } catch (e) {
-      console.error(e);
-      setError("Failed to search places");
+    } catch (e: unknown) {
+      if (e instanceof DOMException && e.name === "AbortError") {
+        // ignored
+      } else {
+        console.error(e);
+      }
     } finally {
       setIsSearching(false);
     }
@@ -171,6 +274,42 @@ export default function ItineraryDate({
     setNewPlaceName(r.display_name);
     setPicked({ lat: parseFloat(r.lat), lon: parseFloat(r.lon), address: r.display_name });
     setSearchResults(null);
+    if (!isAddingPlace) setIsAddingPlace(true);
+    // Focus description to encourage adding details
+    setTimeout(() => descInputRef.current?.focus(), 0);
+  };
+
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
+
+  const persistOrder = async (ids: string[]) => {
+    try {
+      const res = await updateItineraryOrder({
+        tripId,
+        date: new Date(date).toISOString().slice(0, 10),
+        placeIdsInOrder: ids,
+      });
+      if (res.success) {
+        showToast({ title: "Order updated", variant: "success" });
+      } else {
+        showToast({ title: "Failed to update order", description: res.error, variant: "error" });
+      }
+    } catch {
+      showToast({ title: "Failed to update order", description: "Unexpected error", variant: "error" });
+    }
+  };
+
+  const onDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+    setPlaces((items) => {
+      const oldIndex = items.findIndex((i) => i.id === active.id);
+      const newIndex = items.findIndex((i) => i.id === over.id);
+      const reordered = arrayMove(items, oldIndex, newIndex);
+      const ids = reordered.map((i) => i.id);
+      onReorder?.(ids);
+      persistOrder(ids);
+      return reordered;
+    });
   };
 
   return (
@@ -181,37 +320,42 @@ export default function ItineraryDate({
         </h3>
       </div>
 
-      <div className="space-y-2 mb-4">
-        {places.map((place) => (
-          <div
-            key={place.id}
-            className="bg-white border border-gray-200 rounded-lg p-4 flex items-center justify-between"
-          >
-            <div className="flex items-center gap-3">
-              <span className="text-blue-500">📍</span>
-              <div>
-                <span className="text-gray-800 font-medium">{place.name}</span>
-                {place.description && (
-                  <p className="text-gray-500 text-sm">{place.description}</p>
-                )}
-              </div>
-            </div>
-            <button
-              type="button"
-              onClick={() => handleDeletePlace(place.id)}
-              disabled={deletingPlaceId === place.id}
-              className="p-2 hover:bg-red-50 rounded text-red-400 disabled:opacity-50 disabled:cursor-not-allowed"
-              title="Delete place"
-            >
-              {deletingPlaceId === place.id ? (
-                <div className="w-4 h-4 border-2 border-red-400 border-t-transparent rounded-full animate-spin"></div>
-              ) : (
-                <Trash2 />)
-              }
-            </button>
+      <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
+        <SortableContext items={places.map((p) => p.id)} strategy={verticalListSortingStrategy}>
+          <div className="space-y-2 mb-4">
+            {places.map((place) => (
+              <SortableItem key={place.id} id={place.id}>
+                <div
+                  className="bg-white border border-gray-200 rounded-lg p-4 flex items-center justify-between"
+                >
+                  <div className="flex items-center gap-3">
+                    <span className="text-blue-500">📍</span>
+                    <div>
+                      <span className="text-gray-800 font-medium">{place.name}</span>
+                      {place.description && (
+                        <p className="text-gray-500 text-sm">{place.description}</p>
+                      )}
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => handleDeletePlace(place.id)}
+                    disabled={deletingPlaceId === place.id}
+                    className="p-2 hover:bg-red-50 rounded text-red-400 disabled:opacity-50 disabled:cursor-not-allowed"
+                    title="Delete place"
+                  >
+                    {deletingPlaceId === place.id ? (
+                      <div className="w-4 h-4 border-2 border-red-400 border-t-transparent rounded-full animate-spin"></div>
+                    ) : (
+                      <Trash2 />
+                    )}
+                  </button>
+                </div>
+              </SortableItem>
+            ))}
           </div>
-        ))}
-      </div>
+        </SortableContext>
+      </DndContext>
 
       {error && (
         <div className="bg-red-50 text-red-600 p-3 rounded-lg mb-4 text-sm">
@@ -226,7 +370,13 @@ export default function ItineraryDate({
               type="text"
               value={newPlaceName}
               onChange={(e) => setNewPlaceName(e.target.value)}
-              placeholder="Enter place name or pick from search"
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  if (!isLoading) searchPlaces();
+                }
+              }}
+              placeholder="Enter place name or pick from search (press Enter to search)"
               className="flex-1 bg-transparent border-b border-gray-300 outline-none pb-2 focus:border-blue-500"
               autoFocus
               disabled={isLoading}
@@ -241,6 +391,19 @@ export default function ItineraryDate({
               {isSearching ? "Searching..." : "Search"}
             </button>
           </div>
+
+          {picked && (
+            <div className="flex items-center gap-2 text-xs text-gray-600">
+              <span className="px-2 py-1 bg-white border rounded">Selected: {picked.address}</span>
+              <button
+                type="button"
+                onClick={() => setPicked(null)}
+                className="underline"
+              >
+                Clear
+              </button>
+            </div>
+          )}
 
           {searchResults && (
             <div className="bg-white border rounded max-h-48 overflow-auto">
@@ -261,6 +424,7 @@ export default function ItineraryDate({
           )}
 
           <input
+            ref={descInputRef}
             type="text"
             value={newPlaceDescription}
             onChange={(e) => setNewPlaceDescription(e.target.value)}
@@ -274,7 +438,7 @@ export default function ItineraryDate({
               disabled={isLoading || !newPlaceName.trim()}
               className="bg-blue-500 text-white px-4 py-2 rounded text-sm font-medium hover:bg-blue-600 disabled:opacity-50"
             >
-              {isLoading ? "Adding..." : "Add Place"}
+              {isLoading ? "Adding..." : picked ? "Add selected place" : "Add Place"}
             </button>
             <button
               type="button"
@@ -301,7 +465,13 @@ export default function ItineraryDate({
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search a place to add (optional)"
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  if (!isSearching) searchPlaces();
+                }
+              }}
+              placeholder="Search a place to add (press Enter)"
               className="flex-1 bg-white border border-gray-200 rounded px-3 py-2 text-sm"
             />
             <button

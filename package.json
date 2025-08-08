@@ -15,6 +15,9 @@
   },
   "dependencies": {
     "@clerk/nextjs": "^6.26.0",
+    "@dnd-kit/core": "^6.3.1",
+    "@dnd-kit/sortable": "^10.0.0",
+    "@dnd-kit/utilities": "^3.2.2",
     "@neondatabase/serverless": "^0.10.4",
     "dotenv": "^17.2.1",
     "drizzle-orm": "^0.44.3",
