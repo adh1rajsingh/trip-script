@@ -1,6 +1,6 @@
 "use server";
 
-import { auth } from "@clerk/nextjs/server";
+import { auth, clerkClient } from "@clerk/nextjs/server";
 import { redirect } from "next/navigation";
 import { db } from "@/db"
 import { users, trips } from "@/db/schema"
@@ -24,14 +24,36 @@ export async function createTrip(formData: FormData) {
   let newTrip;
 
   try {
-    const user = await db
+    let user = await db
       .select()
       .from(users)
       .where(eq(users.clerkId, clerkUserId))
       .limit(1);
       
     if (user.length === 0) {
-      throw new Error("user not found in db");
+      // Fallback: create the user from Clerk profile if webhook hasn't run yet
+      const clerk = await clerkClient();
+      const clerkUser = await clerk.users.getUser(clerkUserId);
+      const email = clerkUser.emailAddresses?.[0]?.emailAddress || "";
+      const firstName = clerkUser.firstName || "";
+      const lastName = clerkUser.lastName || "";
+
+      await db.insert(users).values({
+        clerkId: clerkUserId,
+        email,
+        firstName,
+        lastName,
+      });
+
+      user = await db
+        .select()
+        .from(users)
+        .where(eq(users.clerkId, clerkUserId))
+        .limit(1);
+
+      if (user.length === 0) {
+        throw new Error("user not found in db after provisioning");
+      }
     }
 
     [newTrip] = await db.insert(trips).values({

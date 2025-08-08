@@ -12,6 +12,9 @@ interface AddPlaceToItineraryParams {
   date: Date;
   name: string;
   description?: string;
+  latitude?: number | null;
+  longitude?: number | null;
+  address?: string | null;
 }
 
 interface AddPlaceResult {
@@ -25,6 +28,9 @@ export async function addPlaceToItinerary({
   date,
   name: newPlaceName,
   description,
+  latitude,
+  longitude,
+  address,
 }: AddPlaceToItineraryParams): Promise<AddPlaceResult> {
   //get the id and check auth
   //validate the input
@@ -99,6 +105,9 @@ export async function addPlaceToItinerary({
         name: newPlaceName.trim(),
         description: description?.trim() || null,
         date: date,
+        latitude: latitude ?? null,
+        longitude: longitude ?? null,
+        address: address ?? null,
         order: maxOrder + 1,
       })
       .returning();

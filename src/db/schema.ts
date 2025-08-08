@@ -1,5 +1,5 @@
 import { relations } from "drizzle-orm";
-import { integer, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
+import { doublePrecision, integer, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
 
 export const users = pgTable('users', {
   id: uuid('id').primaryKey().defaultRandom(),
@@ -41,6 +41,11 @@ export const itineraryItems = pgTable('itinerary_items', {
   name: text('name').notNull(),
   description: text('description'),
   date: timestamp('date').notNull(),
+  
+  // Map location (optional)
+  latitude: doublePrecision('latitude'),
+  longitude: doublePrecision('longitude'),
+  address: text('address'),
   
   order: integer('order').default(0).notNull(), 
   

@@ -1,4 +1,4 @@
-import { clerkClient, clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server'
+import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server'
 
 const isProtectedRoute = createRouteMatcher([
   '/dashboard(.*)',
@@ -14,7 +14,8 @@ export default clerkMiddleware(
     }
   },
   {
-    proxyUrl: 'https://clerk.adhiraj.app',
+    // Only set via env. For localhost, leave undefined to avoid proxy cookie issues.
+    proxyUrl: process.env.NEXT_PUBLIC_CLERK_PROXY_URL,
   }
 );
 
