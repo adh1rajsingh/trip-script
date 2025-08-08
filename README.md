@@ -112,17 +112,16 @@ The application uses a relational database with the following main entities:
 - **Real-time Updates**: Automatic page revalidation after data changes
 
 ### Future Features
-- [ ] **Enhanced UI/UX**: Add loading states and better error handling
-- [ ] **Trip Editing**: Allow users to edit trip details (dates, destination)
+- [x] **Enhanced UI/UX**: Add loading states and better error handling
+- [x] **Trip Editing**: Allow users to edit trip details (dates, destination)
 - [ ] **Drag & Drop**: Reorder itinerary items within days
-- [ ] **Trip Sharing**: Share trip itineraries with others
-- [ ] **Maps Integration**: Google Maps/Mapbox integration for location visualization
+- [x] **Trip Sharing**: Share trip itineraries with others
+- [x] **Maps Integration**: Google Maps/Mapbox integration for location visualization
 - [ ] **AI Recommendations**: AI-powered place suggestions based on destination
 - [ ] **Photo Upload**: Add photos to places and trips
 - [ ] **Weather Integration**: Show weather forecasts for trip dates
 - [ ] **Collaborative Planning**: Ability for users to invite and work with friends
 - [ ] **Export Options**: PDF/print-friendly itinerary exports
-- [ ] **Mobile App**: React Native mobile application
 - [ ] **Offline Support**: PWA capabilities for offline trip viewing
 
 ### Technical Enhancements

@@ -3,7 +3,7 @@
 import { MapContainer, TileLayer, Marker, Popup, useMap, Polyline } from "react-leaflet";
 import L, { Marker as LeafletMarker, LatLngExpression, DivIcon } from "leaflet";
 import "leaflet/dist/leaflet.css";
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 // Fixed default icon (fallback for points without custom icon)
 const DefaultIcon = L.icon({
@@ -98,10 +98,117 @@ export default function TripMap({ points, center, height = 600 }: { points: MapP
   const centerLatLng: LatLngExpression = [defaultCenter.lat, defaultCenter.lng];
   const groups = useGroupedByDay(points);
 
+  const [visibleDays, setVisibleDays] = useState<Set<number>>(new Set());
+  const hasDays = useMemo(() => groups.size > 0, [groups]);
+  useEffect(() => {
+    // Initialize visibility to all days present
+    const next = new Set<number>();
+    for (const d of groups.keys()) next.add(d);
+    setVisibleDays(next);
+  }, [groups]);
+
+  const filteredPoints = useMemo(() => {
+    if (!hasDays) return points; // if no dayIndex present, show all
+    return points.filter((p) => p.dayIndex == null || visibleDays.has(p.dayIndex));
+  }, [points, visibleDays, hasDays]);
+
   const containerHeight = typeof height === "number" ? `${height}px` : height;
 
+  const Legend = () => {
+    const map = useMap();
+    const fitAllVisible = () => {
+      if (filteredPoints.length === 0) return;
+      const bounds = L.latLngBounds(filteredPoints.map((p) => [p.lat, p.lng] as [number, number]));
+      map.flyToBounds(bounds.pad(0.2), { duration: 0.5 });
+    };
+
+    const fitDay = (day: number) => {
+      const arr = groups.get(day) || [];
+      if (arr.length === 0) return;
+      const bounds = L.latLngBounds(arr.map((p) => [p.lat, p.lng] as [number, number]));
+      map.flyToBounds(bounds.pad(0.2), { duration: 0.5 });
+    };
+
+    if (!hasDays) return null;
+    return (
+      <div className="absolute top-2 right-2 z-[1000] space-y-2 text-sm">
+        <div className="bg-white/90 backdrop-blur border rounded shadow-sm p-2">
+          <div className="flex items-center justify-between gap-2 mb-2">
+            <span className="font-medium">Days</span>
+            <div className="flex gap-1">
+              <button
+                type="button"
+                className="px-2 py-1 border rounded hover:bg-gray-50"
+                onClick={() => {
+                  const all = new Set<number>();
+                  for (const d of groups.keys()) all.add(d);
+                  setVisibleDays(all);
+                }}
+              >
+                All
+              </button>
+              <button
+                type="button"
+                className="px-2 py-1 border rounded hover:bg-gray-50"
+                onClick={() => setVisibleDays(new Set())}
+              >
+                None
+              </button>
+              <button
+                type="button"
+                className="px-2 py-1 border rounded hover:bg-gray-50"
+                onClick={fitAllVisible}
+              >
+                Fit
+              </button>
+            </div>
+          </div>
+          <div className="max-h-48 overflow-auto pr-1">
+            {Array.from(groups.entries()).map(([day, arr]) => {
+              const color = DAY_COLORS[day % DAY_COLORS.length];
+              const checked = visibleDays.has(day);
+              return (
+                <div key={day} className="flex items-center justify-between gap-2 py-1">
+                  <label className="inline-flex items-center gap-2 cursor-pointer">
+                    <span className="inline-block w-3 h-3 rounded-full" style={{ backgroundColor: color }} />
+                    <input
+                      type="checkbox"
+                      checked={checked}
+                      onChange={(e) => {
+                        const next = new Set(visibleDays);
+                        if (e.target.checked) next.add(day); else next.delete(day);
+                        setVisibleDays(next);
+                      }}
+                    />
+                    <span>Day {day + 1} <span className="text-gray-500">({arr.length})</span></span>
+                  </label>
+                  <div className="flex gap-1">
+                    <button
+                      type="button"
+                      className="text-xs px-2 py-1 border rounded hover:bg-gray-50"
+                      onClick={() => setVisibleDays(new Set([day]))}
+                    >
+                      Only
+                    </button>
+                    <button
+                      type="button"
+                      className="text-xs px-2 py-1 border rounded hover:bg-gray-50"
+                      onClick={() => fitDay(day)}
+                    >
+                      Fit
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   return (
-    <div className="w-full rounded-lg overflow-hidden border border-gray-200" style={{ height: containerHeight }}>
+    <div className="w-full rounded-lg overflow-hidden border border-gray-200 relative" style={{ height: containerHeight }}>
       <MapContainer center={centerLatLng} zoom={12} style={{ height: "100%", width: "100%" }} scrollWheelZoom>
         <TileLayer
           attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
@@ -109,14 +216,14 @@ export default function TripMap({ points, center, height = 600 }: { points: MapP
         />
 
         {/* Render polylines by day to connect the route order */}
-        {Array.from(groups.entries()).map(([day, arr]) => {
+        {Array.from(groups.entries()).filter(([day]) => visibleDays.has(day)).map(([day, arr]) => {
           const color = DAY_COLORS[day % DAY_COLORS.length];
           const latlngs = arr.map((p) => [p.lat, p.lng]) as [number, number][];
           return <Polyline key={`poly-${day}`} positions={latlngs} pathOptions={{ color, weight: 3, opacity: 0.8 }} />;
         })}
 
         {/* Render markers, colored & numbered by their day's order */}
-        {points.map((p) => {
+        {filteredPoints.map((p) => {
           const color = p.dayIndex != null ? DAY_COLORS[p.dayIndex % DAY_COLORS.length] : "#2563eb"; // default blue
           const number = p.order != null ? (p.order + 1) : undefined;
           const icon = number ? numberIcon(number, color) : DefaultIcon;
@@ -138,6 +245,7 @@ export default function TripMap({ points, center, height = 600 }: { points: MapP
         })}
 
         <FlyToBounds points={points} />
+        <Legend />
       </MapContainer>
     </div>
   );
