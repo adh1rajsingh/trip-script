@@ -4,7 +4,7 @@ import ItineraryDate from "@/components/ItineraryDate";
 import dynamic from "next/dynamic";
 // Removed type import from TripMap to avoid loading Leaflet on server
 import { trips, itineraryItems } from "@/db/schema";
-import { useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition, type ReactNode } from "react";
 import { updateTrip } from "@/app/actions/updateTrip";
 import { toggleShareTrip } from "@/app/actions/toggleShare";
 import { useToast } from "@/components/ui/toast";
@@ -15,7 +15,8 @@ type MapPoint = { id: string; name: string; lat: number; lng: number; address?: 
 
 interface CreateTripProps {
   trip: typeof trips.$inferSelect & {
-    itineraryItems: (typeof itineraryItems.$inferSelect)[];
+  itineraryItems: (typeof itineraryItems.$inferSelect)[];
+  dailyBudgets?: Array<{ date: Date; amountCents: number; currency: string }>
   };
 }
 
@@ -48,6 +49,36 @@ export default function CreateTrip({ trip }: CreateTripProps) {
   const [sharing, startShareTransition] = useTransition();
   const [isPublic, setIsPublic] = useState<boolean>(trip.isPublic ?? false);
   const [shareUrl, setShareUrl] = useState<string | null>(trip.isPublic && trip.shareId ? `/share/${trip.shareId}` : null);
+  const [mapWide, setMapWide] = useState<boolean>(false);
+  const [mapFullscreen, setMapFullscreen] = useState<boolean>(false);
+
+  // Load persisted map width preference
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem("trip.mapWide");
+      if (raw) setMapWide(raw === "1");
+    } catch {}
+  }, []);
+  useEffect(() => {
+    try {
+      localStorage.setItem("trip.mapWide", mapWide ? "1" : "0");
+    } catch {}
+  }, [mapWide]);
+
+  // Close fullscreen on Escape and lock body scroll while active
+  useEffect(() => {
+    if (!mapFullscreen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setMapFullscreen(false);
+    };
+    document.addEventListener("keydown", onKey);
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      document.body.style.overflow = prevOverflow;
+    };
+  }, [mapFullscreen]);
 
   const onSaveTripMeta = () => {
     startTransition(async () => {
@@ -79,15 +110,56 @@ export default function CreateTrip({ trip }: CreateTripProps) {
     });
   };
 
-  const itineraryDays = hasDates
-    ? getDatesRange(new Date(trip.startDate!), new Date(trip.endDate!))
-    : [];
+  const itineraryDays = useMemo(() => (
+    hasDates ? getDatesRange(new Date(trip.startDate!), new Date(trip.endDate!)) : []
+  ), [hasDates, trip.startDate, trip.endDate]);
 
   const dateFormatter = new Intl.DateTimeFormat("en-US", {
     weekday: "long",
     month: "long",
     day: "numeric",
   });
+
+  // Budget summary helpers
+  const budgetsByDay = useMemo(() => {
+    const map = new Map<string, { amountCents: number; currency: string }>();
+    const list = trip.dailyBudgets;
+    if (list && Array.isArray(list)) {
+      for (const b of list) {
+        const d = new Date(b.date);
+        map.set(d.toDateString(), { amountCents: b.amountCents ?? 0, currency: b.currency ?? "USD" });
+      }
+    }
+    return map;
+  }, [trip]);
+
+  const spentByDay = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const item of trip.itineraryItems) {
+      const d = new Date(item.date).toDateString();
+      const add = item.costCents ?? 0;
+      map.set(d, (map.get(d) ?? 0) + add);
+    }
+    return map;
+  }, [trip.itineraryItems]);
+
+  const summary = useMemo(() => {
+    let totalBudget = 0;
+    let totalSpent = 0;
+    let currency = "USD";
+    if (itineraryDays.length > 0) {
+      const firstBudget = budgetsByDay.get(itineraryDays[0].toDateString());
+      if (firstBudget?.currency) currency = firstBudget.currency;
+    }
+    for (const d of itineraryDays) {
+      const key = d.toDateString();
+      totalBudget += budgetsByDay.get(key)?.amountCents ?? 0;
+      totalSpent += spentByDay.get(key) ?? 0;
+    }
+    return { totalBudget, totalSpent, remaining: totalBudget - totalSpent, currency };
+  }, [itineraryDays, budgetsByDay, spentByDay]);
+
+  const fmtCurrency = (cents: number) => `${summary.currency} ${(cents / 100).toFixed(2)}`;
 
   const getPlacesForDate = (date: Date) => {
     return trip.itineraryItems
@@ -103,7 +175,17 @@ export default function CreateTrip({ trip }: CreateTripProps) {
         latitude: item.latitude ?? null,
         longitude: item.longitude ?? null,
         address: item.address ?? null,
+        costCents: item.costCents ?? null,
+        costCurrency: item.costCurrency ?? null,
       }));
+  };
+
+  const getBudgetForDate = (date: Date) => {
+    const budgets = trip.dailyBudgets ?? [];
+    const day = new Date(date);
+    day.setHours(0, 0, 0, 0);
+    const found = budgets.find((b) => new Date(b.date).toDateString() === day.toDateString());
+    return { amountCents: found?.amountCents ?? 0, currency: found?.currency ?? "USD" };
   };
 
   const initialMapPoints: MapPoint[] = useMemo(() => {
@@ -178,7 +260,7 @@ export default function CreateTrip({ trip }: CreateTripProps) {
 
   return (
     <div className="max-w-6xl mx-auto py-12 px-4">
-      <div className="mb-6">
+  <div className="mb-6">
         {editing ? (
           <div className="bg-white border rounded-lg p-4 flex flex-col gap-3">
             <input
@@ -216,6 +298,24 @@ export default function CreateTrip({ trip }: CreateTripProps) {
           </div>
         )}
         {!editing && <p className="text-lg text-gray-500">Your itinerary awaits ✨</p>}
+        {!editing && (
+          <div className="mt-3 bg-white border rounded-lg p-3 flex items-center gap-6 text-sm">
+            <div>
+              <span className="text-gray-600">Total budget:</span>
+              <span className="ml-2 font-medium">{fmtCurrency(summary.totalBudget)}</span>
+            </div>
+            <div>
+              <span className="text-gray-600">Planned spend:</span>
+              <span className="ml-2 font-medium">{fmtCurrency(summary.totalSpent)}</span>
+            </div>
+            <div>
+              <span className="text-gray-600">Remaining:</span>
+              <span className={`ml-2 font-medium ${summary.remaining < 0 ? "text-red-600" : "text-green-700"}`}>
+                {fmtCurrency(summary.remaining)}
+              </span>
+            </div>
+          </div>
+        )}
         <div className="mt-3 flex items-center gap-3">
           <label className="inline-flex items-center gap-2 text-sm">
             <input type="checkbox" checked={isPublic} onChange={(e) => onToggleShare(e.target.checked)} disabled={sharing} />
@@ -233,11 +333,29 @@ export default function CreateTrip({ trip }: CreateTripProps) {
               Copy link
             </button>
           )}
+          <div className="ml-auto flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setMapWide((v) => !v)}
+              className="text-sm px-3 py-1 rounded border"
+              title={mapWide ? "Reduce map width" : "Expand map width"}
+            >
+              {mapWide ? "Shrink map" : "Expand map"}
+            </button>
+            <button
+              type="button"
+              onClick={() => setMapFullscreen(true)}
+              className="text-sm px-3 py-1 rounded border"
+              title="Open map fullscreen"
+            >
+              Fullscreen
+            </button>
+          </div>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-5 gap-8 items-start">
-        <div className="md:col-span-3 space-y-8">
+      <div className={`grid grid-cols-1 md:grid-cols-6 gap-8 items-start`}>
+        <div className={`${mapWide ? "md:col-span-2" : "md:col-span-3"} space-y-8`}>
           {itineraryDays.map((date) => {
             const [dayName, monthAndDay] = dateFormatter.format(date).split(", ");
             const [month, dayNumberStr] = monthAndDay.split(" ");
@@ -251,6 +369,8 @@ export default function CreateTrip({ trip }: CreateTripProps) {
                 month={month}
                 dayNumber={parseInt(dayNumberStr)}
                 initialPlaces={getPlacesForDate(date)}
+                initialBudgetCents={getBudgetForDate(date).amountCents}
+                currency={getBudgetForDate(date).currency}
                 onPlaceAdded={handlePlaceAddedToMap}
                 onPlaceDeleted={handlePlaceDeletedFromMap}
               />
@@ -258,12 +378,84 @@ export default function CreateTrip({ trip }: CreateTripProps) {
           })}
         </div>
 
-        <div className="md:col-span-2">
-          <div className="sticky top-20">
-            <TripMap points={points} center={mapCenter} height="calc(100vh - 6rem)" />
+        {!mapFullscreen && (
+          <div className={`${mapWide ? "md:col-span-4" : "md:col-span-3"} md:sticky md:top-20 md:self-start`}>
+            <LazyMount>
+              <TripMap points={points} center={mapCenter} height="calc(100vh - 5rem)" />
+            </LazyMount>
           </div>
-        </div>
+        )}
       </div>
+
+      {mapFullscreen && (
+        <div className="fixed inset-0 z-50 bg-white" role="dialog" aria-modal="true">
+          <div className="absolute top-3 right-3 flex gap-2 z-[1100]">
+            <button
+              type="button"
+              onClick={() => setMapFullscreen(false)}
+              className="px-3 py-2 rounded border bg-white shadow"
+              title="Exit fullscreen (Esc)"
+            >
+              Exit fullscreen
+            </button>
+          </div>
+          <div
+            className="absolute bottom-4 right-4 text-xs text-gray-700 bg-white/80 backdrop-blur px-2 py-1 rounded shadow-sm select-none z-[1100]"
+            aria-hidden="true"
+          >
+            Press Esc to exit fullscreen
+          </div>
+          <div className="absolute bottom-4 left-4 z-[1100]">
+            <button
+              type="button"
+              onClick={() => setMapFullscreen(false)}
+              className="px-4 py-2 rounded-full border bg-white/90 backdrop-blur shadow text-sm"
+              title="Exit fullscreen"
+            >
+              Exit fullscreen
+            </button>
+          </div>
+          <TripMap
+            points={points}
+            center={mapCenter}
+            height="100vh"
+            onExitFullscreen={() => setMapFullscreen(false)}
+          />
+        </div>
+      )}
+    </div>
+  );
+}
+
+function LazyMount({ children }: { children: ReactNode }) {
+  const [visible, setVisible] = useState(false);
+  const ref = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (visible) return;
+    const el = ref.current;
+    if (!el) return;
+    const obs = new IntersectionObserver(
+      (entries) => {
+        const entry = entries[0];
+        if (entry.isIntersecting) {
+          setVisible(true);
+          obs.disconnect();
+        }
+      },
+      { rootMargin: "200px", threshold: 0.01 }
+    );
+    obs.observe(el);
+    return () => obs.disconnect();
+  }, [visible]);
+
+  return (
+    <div ref={ref} style={{ minHeight: "300px" }}>
+      {visible ? (
+        children
+      ) : (
+        <div className="w-full h-[60vh] rounded-lg border border-gray-200 bg-gray-50 animate-pulse" />
+      )}
     </div>
   );
 }

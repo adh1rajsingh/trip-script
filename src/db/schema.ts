@@ -1,5 +1,5 @@
 import { relations } from "drizzle-orm";
-import { doublePrecision, integer, pgTable, text, timestamp, uuid, boolean } from "drizzle-orm/pg-core";
+import { doublePrecision, integer, pgTable, text, timestamp, uuid, boolean, unique } from "drizzle-orm/pg-core";
 
 export const users = pgTable('users', {
   id: uuid('id').primaryKey().defaultRandom(),
@@ -35,6 +35,7 @@ export const tripsRelations = relations(trips, ({ one, many }) => ({
     references: [users.id],
   }),
   itineraryItems: many(itineraryItems),
+  dailyBudgets: many(dailyBudgets),
 }));
 
 export const itineraryItems = pgTable('itinerary_items', {
@@ -51,6 +52,10 @@ export const itineraryItems = pgTable('itinerary_items', {
   address: text('address'),
   
   order: integer('order').default(0).notNull(), 
+
+  // Optional cost for this place/experience (in minor units e.g., cents)
+  costCents: integer('cost_cents'),
+  costCurrency: text('cost_currency'),
   
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
@@ -60,6 +65,27 @@ export const itineraryItems = pgTable('itinerary_items', {
 export const itineraryItemsRelations = relations(itineraryItems, ({ one }) => ({
   trip: one(trips, {
     fields: [itineraryItems.tripId],
+    references: [trips.id],
+  }),
+}));
+
+// Per-day budget allocation for a trip
+export const dailyBudgets = pgTable('daily_budgets', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  tripId: uuid('trip_id').references(() => trips.id, { onDelete: 'cascade' }).notNull(),
+  date: timestamp('date').notNull(),
+  // Budget in minor units (e.g., cents)
+  amountCents: integer('amount_cents').notNull().default(0),
+  currency: text('currency').notNull().default('USD'),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+}, (table) => [
+  unique('daily_budgets_trip_date_unique').on(table.tripId, table.date),
+]);
+
+export const dailyBudgetsRelations = relations(dailyBudgets, ({ one }) => ({
+  trip: one(trips, {
+    fields: [dailyBudgets.tripId],
     references: [trips.id],
   }),
 }));

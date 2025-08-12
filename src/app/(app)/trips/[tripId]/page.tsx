@@ -18,6 +18,7 @@ export default async function TripPage({ params }: TripPageProps) {
       itineraryItems: {
         orderBy: (itineraryItems, { asc }) => [asc(itineraryItems.date), asc(itineraryItems.order)],
       },
+  dailyBudgets: true,
     },
   });
 

@@ -1,10 +1,10 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { addPlaceToItinerary } from "@/app/actions/addPlaceToItinerary";
 import { deletePlaceFromItinerary } from "@/app/actions/deletePlaceFromItinerary";
 import { updateItineraryOrder } from "@/app/actions/updateItineraryOrder";
-import { Trash2, MapPin } from "lucide-react";
+import { Trash2, MapPin, Wallet } from "lucide-react";
 import { useToast } from "@/components/ui/toast";
 import {
   DndContext,
@@ -22,7 +22,6 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 
-
 interface ItineraryDateProps {
   tripId: string;
   date: Date;
@@ -30,6 +29,8 @@ interface ItineraryDateProps {
   month: string;
   dayNumber: number;
   initialPlaces?: Place[];
+  initialBudgetCents?: number;
+  currency?: string;
   onPlaceAdded?: (place: Place & { date?: Date; order?: number }) => void;
   onPlaceDeleted?: (placeId: string) => void;
   onReorder?: (placeIdsInOrder: string[]) => void;
@@ -42,7 +43,11 @@ interface Place {
   latitude?: number | null;
   longitude?: number | null;
   address?: string | null;
+  costCents?: number | null;
+  costCurrency?: string | null;
 }
+import { setDailyBudget } from "@/app/actions/setDailyBudget";
+import { updatePlaceCost } from "@/app/actions/updatePlaceCost";
 
 function SortableItem({ id, children }: { id: string; children: React.ReactNode }) {
   const { attributes, listeners, setNodeRef, transform, transition } = useSortable({ id });
@@ -65,11 +70,15 @@ export default function ItineraryDate({
   month,
   dayNumber,
   initialPlaces = [],
+  initialBudgetCents = 0,
+  currency = "USD",
   onPlaceAdded,
   onPlaceDeleted,
   onReorder,
 }: ItineraryDateProps) {
   const [places, setPlaces] = useState<Place[]>(initialPlaces);
+  const [budgetCents, setBudgetCents] = useState<number>(initialBudgetCents);
+  const [savingBudget, setSavingBudget] = useState(false);
   const [isAddingPlace, setIsAddingPlace] = useState(false);
   const [newPlaceName, setNewPlaceName] = useState("");
   const [newPlaceDescription, setNewPlaceDescription] = useState("");
@@ -84,6 +93,35 @@ export default function ItineraryDate({
   const [picked, setPicked] = useState<{ lat: number; lon: number; address: string } | null>(null);
   const descInputRef = useRef<HTMLInputElement | null>(null);
   const searchControllerRef = useRef<AbortController | null>(null);
+
+  type SearchResult = { display_name: string; lat: string; lon: string };
+  const searchCacheRef = useRef<Map<string, SearchResult[]>>(new Map());
+  const readCache = useCallback((q: string): SearchResult[] | null => {
+    const key = `nomi:${q.toLowerCase()}`;
+    if (searchCacheRef.current.has(key)) return searchCacheRef.current.get(key)!;
+    try {
+      const raw = sessionStorage.getItem(key);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) {
+          searchCacheRef.current.set(key, parsed);
+          return parsed as SearchResult[];
+        }
+      }
+    } catch {
+      // ignore
+    }
+    return null;
+  }, []);
+  const writeCache = useCallback((q: string, data: SearchResult[]) => {
+    const key = `nomi:${q.toLowerCase()}`;
+    searchCacheRef.current.set(key, data);
+    try {
+      sessionStorage.setItem(key, JSON.stringify(data));
+    } catch {
+      // ignore
+    }
+  }, []);
 
   const { showToast } = useToast();
 
@@ -100,7 +138,7 @@ export default function ItineraryDate({
       let lon: number | undefined;
       let address: string | undefined;
 
-      if (picked) {
+  if (picked) {
         lat = picked.lat;
         lon = picked.lon;
         address = picked.address;
@@ -122,7 +160,7 @@ export default function ItineraryDate({
         address,
       });
 
-      if (result.success) {
+  if (result.success) {
         const newPlace: Place = {
           id: result.placeId!,
           name: newPlaceName.trim(),
@@ -141,11 +179,7 @@ export default function ItineraryDate({
         setSearchQuery("");
         setPicked(null);
 
-        showToast({
-          title: "Place added",
-          description: `${newPlace.name} added to your itinerary`,
-          variant: "success",
-        });
+        showToast({ title: "Place added", description: `${newPlace.name} added to your itinerary`, variant: "success" });
       } else {
         setError(result.error || "Failed to add place");
         showToast({ title: "Failed to add place", description: result.error || undefined, variant: "error" });
@@ -162,17 +196,11 @@ export default function ItineraryDate({
   const handleDeletePlace = async (placeId: string) => {
     setDeletingPlaceId(placeId);
     setError(null);
-
     try {
-      const result = await deletePlaceFromItinerary({
-        placeId,
-        tripId,
-      });
+      const result = await deletePlaceFromItinerary({ placeId, tripId });
 
       if (result.success) {
-        setPlaces((currentPlaces) =>
-          currentPlaces.filter((p) => p.id !== placeId)
-        );
+        setPlaces((currentPlaces) => currentPlaces.filter((p) => p.id !== placeId));
         onPlaceDeleted?.(placeId);
         showToast({ title: "Place removed", variant: "success" });
       } else {
@@ -188,10 +216,9 @@ export default function ItineraryDate({
     }
   };
 
-  // Debounced search-as-you-type (works for both top search and add form input)
+  // Debounced search-as-you-type
   useEffect(() => {
     const q = (isAddingPlace ? newPlaceName : searchQuery).trim();
-    // Avoid searching when a place has been picked in add form until cleared
     if (isAddingPlace && picked) return;
     if (q.length < 3) {
       setSearchResults(null);
@@ -199,9 +226,13 @@ export default function ItineraryDate({
     }
     const timer = setTimeout(async () => {
       try {
-        if (searchControllerRef.current) {
-          searchControllerRef.current.abort();
+        // Cache first
+        const cached = readCache(q);
+        if (cached) {
+          setSearchResults(cached);
+          return;
         }
+        if (searchControllerRef.current) searchControllerRef.current.abort();
         const controller = new AbortController();
         searchControllerRef.current = controller;
         setIsSearching(true);
@@ -210,29 +241,21 @@ export default function ItineraryDate({
         url.searchParams.set("format", "json");
         url.searchParams.set("addressdetails", "1");
         url.searchParams.set("limit", "5");
-        const res = await fetch(url.toString(), {
-          headers: { Accept: "application/json" },
-          signal: controller.signal,
-        });
+        const res = await fetch(url.toString(), { headers: { Accept: "application/json" }, signal: controller.signal });
         if (!res.ok) throw new Error("search failed");
-        const data = await res.json();
-        setSearchResults(data);
+  const data: SearchResult[] = await res.json();
+  setSearchResults(data);
+  writeCache(q, data);
       } catch (e: unknown) {
-        if (e instanceof DOMException && e.name === "AbortError") {
-          // ignored
-        } else {
-          console.error(e);
-        }
+        if (!(e instanceof DOMException && e.name === "AbortError")) console.error(e);
       } finally {
         setIsSearching(false);
       }
     }, 500);
-    return () => {
-      clearTimeout(timer);
-    };
-  }, [isAddingPlace, newPlaceName, searchQuery, picked]);
+    return () => clearTimeout(timer);
+  }, [isAddingPlace, newPlaceName, searchQuery, picked, readCache, writeCache]);
 
-  // Immediate search trigger for buttons/Enter key
+  // Manual search trigger
   const searchPlaces = async () => {
     const q = (isAddingPlace ? newPlaceName : searchQuery).trim();
     if (isAddingPlace && picked) return;
@@ -241,9 +264,13 @@ export default function ItineraryDate({
       return;
     }
     try {
-      if (searchControllerRef.current) {
-        searchControllerRef.current.abort();
+      // Cache first
+      const cached = readCache(q);
+      if (cached) {
+        setSearchResults(cached);
+        return;
       }
+      if (searchControllerRef.current) searchControllerRef.current.abort();
       const controller = new AbortController();
       searchControllerRef.current = controller;
       setIsSearching(true);
@@ -252,19 +279,13 @@ export default function ItineraryDate({
       url.searchParams.set("format", "json");
       url.searchParams.set("addressdetails", "1");
       url.searchParams.set("limit", "5");
-      const res = await fetch(url.toString(), {
-        headers: { Accept: "application/json" },
-        signal: controller.signal,
-      });
+      const res = await fetch(url.toString(), { headers: { Accept: "application/json" }, signal: controller.signal });
       if (!res.ok) throw new Error("search failed");
-      const data = await res.json();
-      setSearchResults(data);
+  const data: SearchResult[] = await res.json();
+  setSearchResults(data);
+  writeCache(q, data);
     } catch (e: unknown) {
-      if (e instanceof DOMException && e.name === "AbortError") {
-        // ignored
-      } else {
-        console.error(e);
-      }
+      if (!(e instanceof DOMException && e.name === "AbortError")) console.error(e);
     } finally {
       setIsSearching(false);
     }
@@ -275,7 +296,6 @@ export default function ItineraryDate({
     setPicked({ lat: parseFloat(r.lat), lon: parseFloat(r.lon), address: r.display_name });
     setSearchResults(null);
     if (!isAddingPlace) setIsAddingPlace(true);
-    // Focus description to encourage adding details
     setTimeout(() => descInputRef.current?.focus(), 0);
   };
 
@@ -288,6 +308,7 @@ export default function ItineraryDate({
         date: new Date(date).toISOString().slice(0, 10),
         placeIdsInOrder: ids,
       });
+    
       if (res.success) {
         showToast({ title: "Order updated", variant: "success" });
       } else {
@@ -301,15 +322,108 @@ export default function ItineraryDate({
   const onDragEnd = (event: DragEndEvent) => {
     const { active, over } = event;
     if (!over || active.id === over.id) return;
-    setPlaces((items) => {
-      const oldIndex = items.findIndex((i) => i.id === active.id);
-      const newIndex = items.findIndex((i) => i.id === over.id);
-      const reordered = arrayMove(items, oldIndex, newIndex);
-      const ids = reordered.map((i) => i.id);
+
+    const oldIndex = places.findIndex((i) => i.id === active.id);
+    const newIndex = places.findIndex((i) => i.id === over.id);
+    if (oldIndex === -1 || newIndex === -1) return;
+
+    const reordered = arrayMove(places, oldIndex, newIndex);
+    const ids = reordered.map((i) => i.id);
+
+    setPlaces(reordered);
+    onReorder?.(ids);
+    void persistOrder(ids);
+  };
+
+  // Budget helpers
+  const daySpendCents = places.reduce((sum, p) => sum + (p.costCents ?? 0), 0);
+  const remainingCents = (budgetCents || 0) - daySpendCents;
+  const fmt = (c: number) => `${currency} ${(c / 100).toFixed(2)}`;
+  const saveBudget = async () => {
+    setSavingBudget(true);
+    try {
+      const res = await setDailyBudget({ tripId, date, amountCents: Math.max(0, Math.round(budgetCents || 0)), currency });
+      if (res.success) {
+        showToast({ title: "Budget saved", variant: "success" });
+      } else {
+        showToast({ title: "Failed to save budget", description: res.error, variant: "error" });
+      }
+    } finally {
+      setSavingBudget(false);
+    }
+  };
+
+  const optimizeRoute = async () => {
+    const current = places;
+    const coords = current
+      .map((p, idx) => ({ idx, p }))
+      .filter(({ p }) => p.longitude != null && p.latitude != null) as Array<{
+        idx: number;
+        p: Required<Pick<Place, "latitude" | "longitude">> & Place;
+      }>;
+
+    if (coords.length < 3) {
+      showToast({ title: "Need 3+ places with coordinates to optimize", variant: "error" });
+      return;
+    }
+
+    try {
+      const coordStr = coords.map(({ p }) => `${p.longitude},${p.latitude}`).join(";");
+      const url = `https://router.project-osrm.org/table/v1/driving/${coordStr}?annotations=duration`;
+      const res = await fetch(url);
+      if (!res.ok) throw new Error("Failed to fetch matrix");
+      const data = await res.json();
+      const durations: number[][] = data.durations;
+
+      // Nearest Neighbor heuristic, keep the first place fixed as start
+      const fixedStartGlobalIdx = coords[0].idx;
+      const coordIndices = coords.map((c) => c.idx);
+      const globalToCoordIndex = new Map<number, number>();
+      coordIndices.forEach((gIdx, i) => globalToCoordIndex.set(gIdx, i));
+
+      const visited = new Set<number>();
+      const orderGlobalIndices: number[] = [];
+
+      let currentGlobal = fixedStartGlobalIdx;
+      orderGlobalIndices.push(currentGlobal);
+      visited.add(globalToCoordIndex.get(currentGlobal)!);
+
+      while (visited.size < coords.length) {
+        const curCoordIdx = globalToCoordIndex.get(currentGlobal)!;
+        let bestNext: number | null = null;
+        let bestCost = Infinity;
+        for (let i = 0; i < coords.length; i++) {
+          if (visited.has(i)) continue;
+          const cost = durations[curCoordIdx][i];
+          if (cost != null && cost < bestCost) {
+            bestCost = cost;
+            bestNext = i;
+          }
+        }
+        if (bestNext == null) break;
+        visited.add(bestNext);
+        const nextGlobal = coordIndices[bestNext];
+        orderGlobalIndices.push(nextGlobal);
+        currentGlobal = nextGlobal;
+      }
+
+      // Merge: keep non-geo items in their relative order at the end
+      const geoSet = new Set(orderGlobalIndices);
+      const nonGeoGlobal = current.map((_, idx) => idx).filter((idx) => !geoSet.has(idx));
+      const finalOrderGlobal = [...orderGlobalIndices, ...nonGeoGlobal];
+
+      const newPlaces = finalOrderGlobal.map((i) => current[i]);
+      const ids = newPlaces.map((p) => p.id);
+
+      setPlaces(newPlaces);
       onReorder?.(ids);
-      persistOrder(ids);
-      return reordered;
-    });
+      await persistOrder(ids);
+
+      showToast({ title: "Route optimized", variant: "success" });
+    } catch (e) {
+      console.error(e);
+      showToast({ title: "Failed to optimize", description: "Routing service error", variant: "error" });
+    }
   };
 
   return (
@@ -318,6 +432,57 @@ export default function ItineraryDate({
         <h3 className="text-lg font-semibold text-gray-800">
           {dayName}, {month} {dayNumber}
         </h3>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            className="text-xs px-3 py-1 border rounded hover:bg-gray-50"
+            onClick={optimizeRoute}
+          >
+            Optimize route
+          </button>
+        </div>
+      </div>
+
+      <div className="mb-6 bg-white border border-gray-200 rounded-lg p-4 shadow-sm grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 items-start overflow-hidden">
+        <div className="flex items-center gap-3 text-sm flex-wrap min-w-0">
+          <Wallet className="w-4 h-4 text-blue-600" />
+          <span className="text-gray-700">Budget</span>
+          <input
+            type="number"
+            min={0}
+            step={1}
+            value={Math.round((budgetCents || 0) / 100)}
+            inputMode="numeric"
+            pattern="[0-9]*"
+            onChange={(e) => {
+              // Normalize to digits only and strip leading zeros
+              const raw = e.target.value;
+              const digits = raw.replace(/\D+/g, "");
+              const normalized = digits.replace(/^0+(\d)/, "$1");
+              const units = normalized === "" ? 0 : parseInt(normalized, 10);
+              setBudgetCents(Math.max(0, units * 100));
+            }}
+            onFocus={(e) => e.currentTarget.select()}
+            className="w-28 border rounded px-2 py-1 text-sm"
+            aria-label="Daily budget"
+          />
+          <span className="inline-flex items-center rounded border px-2 py-0.5 text-[11px] text-gray-700 bg-gray-50 border-gray-200">{currency}</span>
+          <button
+            type="button"
+            onClick={saveBudget}
+            disabled={savingBudget}
+            className="text-xs px-3 py-1 border rounded hover:bg-gray-50"
+          >
+            {savingBudget ? "Saving..." : "Save"}
+          </button>
+        </div>
+  <div className="text-sm flex items-center gap-x-3 gap-y-1 justify-start sm:justify-end flex-wrap min-w-0">
+          <span className="text-gray-700">Spent: </span>
+          <span>{fmt(daySpendCents)}</span>
+          <span className="text-gray-300">|</span>
+          <span className="text-gray-700">Remaining: </span>
+          <span className={remainingCents < 0 ? "text-red-600 font-medium" : "text-green-700"}>{fmt(remainingCents)}</span>
+        </div>
       </div>
 
       <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
@@ -325,9 +490,7 @@ export default function ItineraryDate({
           <div className="space-y-2 mb-4">
             {places.map((place) => (
               <SortableItem key={place.id} id={place.id}>
-                <div
-                  className="bg-white border border-gray-200 rounded-lg p-4 flex items-center justify-between"
-                >
+                <div className="bg-white border border-gray-200 rounded-lg p-4 flex items-center justify-between">
                   <div className="flex items-center gap-3">
                     <span className="text-blue-500">📍</span>
                     <div>
@@ -335,6 +498,39 @@ export default function ItineraryDate({
                       {place.description && (
                         <p className="text-gray-500 text-sm">{place.description}</p>
                       )}
+                      <div className="mt-1 text-xs text-gray-600 flex items-center gap-2">
+                        <label className="inline-flex items-center gap-1">
+                          <span>Cost</span>
+                          <input
+                            type="text"
+                            inputMode="numeric"
+                            pattern="[0-9]*"
+                            defaultValue={place.costCents ? Math.round(place.costCents / 100).toString() : ""}
+                            placeholder="0"
+                            className="w-24 border rounded px-1.5 py-0.5 text-xs"
+                            onFocus={(e) => e.currentTarget.select()}
+                            onBlur={async (e) => {
+                              const raw = e.currentTarget.value;
+                              const digits = raw.replace(/\D+/g, "");
+                              const normalized = digits.replace(/^0+(\d)/, "$1");
+                              const unitsStr = normalized === "" ? "" : String(parseInt(normalized, 10));
+                              e.currentTarget.value = unitsStr;
+                              const cents = unitsStr === "" ? null : Math.max(0, parseInt(unitsStr, 10) * 100);
+                              const prev = place.costCents ?? null;
+                              if (cents === prev) return;
+                              const res = await updatePlaceCost({ tripId, placeId: place.id, costCents: cents, currency });
+                              if (res.success) {
+                                setPlaces((curr) => curr.map((p) => (p.id === place.id ? { ...p, costCents: cents, costCurrency: cents == null ? null : currency } : p)));
+                                showToast({ title: "Cost updated", variant: "success" });
+                              } else {
+                                showToast({ title: "Failed to update cost", description: res.error, variant: "error" });
+                              }
+                            }}
+                          />
+                          <span>{currency}</span>
+                        </label>
+                        {place.costCents != null && <span>— {fmt(place.costCents)}</span>}
+                      </div>
                     </div>
                   </div>
                   <button
@@ -358,9 +554,7 @@ export default function ItineraryDate({
       </DndContext>
 
       {error && (
-        <div className="bg-red-50 text-red-600 p-3 rounded-lg mb-4 text-sm">
-          {error}
-        </div>
+        <div className="bg-red-50 text-red-600 p-3 rounded-lg mb-4 text-sm">{error}</div>
       )}
 
       {isAddingPlace ? (
@@ -395,11 +589,7 @@ export default function ItineraryDate({
           {picked && (
             <div className="flex items-center gap-2 text-xs text-gray-600">
               <span className="px-2 py-1 bg-white border rounded">Selected: {picked.address}</span>
-              <button
-                type="button"
-                onClick={() => setPicked(null)}
-                className="underline"
-              >
+              <button type="button" onClick={() => setPicked(null)} className="underline">
                 Clear
               </button>
             </div>
