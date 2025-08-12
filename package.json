@@ -7,6 +7,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
+  "seed": "tsx scripts/seed.ts",
+  "db:check": "tsx scripts/check-db.ts",
     "db:generate": "drizzle-kit generate",
     "db:push": "drizzle-kit push",
     "db:drop": "drizzle-kit drop",

@@ -55,7 +55,17 @@ export default async function TripsPage() {
 
   try {
     const userTrips = await db
-      .select()
+      .select({
+        id: trips.id,
+        userId: trips.userId,
+        destination: trips.destination,
+        startDate: trips.startDate,
+        endDate: trips.endDate,
+        isPublic: trips.isPublic,
+        shareId: trips.shareId,
+        createdAt: trips.createdAt,
+        updatedAt: trips.updatedAt,
+      })
       .from(trips)
       .where(eq(trips.userId, user[0].id))
       .orderBy(trips.createdAt);

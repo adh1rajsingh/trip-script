@@ -74,13 +74,22 @@ A modern trip planning application built with Next.js that helps users discover,
    npm run db:push
    ```
 
-5. **Run the development server**
+5. (Optional) Seed demo data
+   ```bash
+   # Ensure DATABASE_URL is set in .env.local
+   npm run seed
+   ```
+   This creates a demo user, a 5-day Paris trip with itinerary items, daily budgets, sample expenses in multiple currencies, and currency rates. It prints URLs you can open.
+
+6. **Run the development server**
    ```bash
    npm run dev
    ```
 
-6. **Open your browser**
+7. **Open your browser**
    Navigate to `http://localhost:3000`
+
+Note: If you see UI for expenses/rates but inserts fail, your database may be missing the latest columns/tables (e.g., trips.base_currency, expenses, currency_rates). Apply the migrations to the correct database configured in DATABASE_URL, then re-run the seed.
 
 ## Project Structure
 
@@ -114,7 +123,7 @@ The application uses a relational database with the following main entities:
 ### Future Features
 - [x] **Enhanced UI/UX**: Add loading states and better error handling
 - [x] **Trip Editing**: Allow users to edit trip details (dates, destination)
-- [ ] **Drag & Drop**: Reorder itinerary items within days
+- [x] **Drag & Drop**: Reorder itinerary items within days
 - [x] **Trip Sharing**: Share trip itineraries with others
 - [x] **Maps Integration**: Google Maps/Mapbox integration for location visualization
 - [ ] **AI Recommendations**: AI-powered place suggestions based on destination

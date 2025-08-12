@@ -8,6 +8,8 @@ import { useEffect, useMemo, useRef, useState, useTransition, type ReactNode } f
 import { updateTrip } from "@/app/actions/updateTrip";
 import { toggleShareTrip } from "@/app/actions/toggleShare";
 import { useToast } from "@/components/ui/toast";
+import { addExpense, deleteExpense, setCurrencyRate } from "@/app/actions/expenses";
+import DayExpenses from "@/components/DayExpenses";
 
 const TripMap = dynamic(() => import("@/components/TripMap"), { ssr: false });
 
@@ -25,6 +27,8 @@ interface CreateTripProps {
   trip: typeof trips.$inferSelect & {
   itineraryItems: (typeof itineraryItems.$inferSelect)[];
   dailyBudgets?: Array<{ date: Date; amountCents: number; currency: string }>
+  expenses?: Array<{ id: string; tripId: string; itineraryItemId: string | null; date: Date; amountCents: number; currency: string; category: string; note: string | null; receiptUrl: string | null }>
+  currencyRates?: Array<{ id: string; currency: string; rateToBase: number }>
   };
 }
 
@@ -154,10 +158,13 @@ export default function CreateTrip({ trip }: CreateTripProps) {
   const summary = useMemo(() => {
     let totalBudget = 0;
     let totalSpent = 0;
-    let currency = "USD";
+    let currency = trip.baseCurrency || "USD";
     if (itineraryDays.length > 0) {
       const firstBudget = budgetsByDay.get(itineraryDays[0].toDateString());
-      if (firstBudget?.currency) currency = firstBudget.currency;
+      if (firstBudget?.currency) {
+        // Prefer trip base currency, but if not set, fall back to budget currency
+        currency = trip.baseCurrency || firstBudget.currency;
+      }
     }
     for (const d of itineraryDays) {
       const key = d.toDateString();
@@ -165,9 +172,30 @@ export default function CreateTrip({ trip }: CreateTripProps) {
       totalSpent += spentByDay.get(key) ?? 0;
     }
     return { totalBudget, totalSpent, remaining: totalBudget - totalSpent, currency };
-  }, [itineraryDays, budgetsByDay, spentByDay]);
+  }, [itineraryDays, budgetsByDay, spentByDay, trip.baseCurrency]);
 
   const fmtCurrency = (cents: number) => `${summary.currency} ${(cents / 100).toFixed(2)}`;
+
+  // Expenses + conversion helpers
+  const baseCurrency = trip.baseCurrency || "USD";
+  const rateMap = useMemo(() => {
+    const m = new Map<string, number>();
+    (trip.currencyRates ?? []).forEach((r) => m.set(r.currency.toUpperCase(), r.rateToBase));
+    m.set(baseCurrency.toUpperCase(), 1);
+    return m;
+  }, [trip.currencyRates, baseCurrency]);
+
+  const expensesByDay = useMemo(() => {
+    const map = new Map<string, Array<{ id: string; itineraryItemId: string | null; date: Date; amountCents: number; currency: string; category: string; note: string | null; receiptUrl: string | null }>>();
+    const list = trip.expenses ?? [];
+    for (const e of list) {
+      const key = new Date(e.date).toDateString();
+      const arr = map.get(key) ?? [];
+      arr.push(e);
+      map.set(key, arr);
+    }
+    return map;
+  }, [trip.expenses]);
 
   const getPlacesForDate = (date: Date) => {
     return trip.itineraryItems
@@ -345,6 +373,10 @@ export default function CreateTrip({ trip }: CreateTripProps) {
                 {fmtCurrency(summary.remaining)}
               </span>
             </div>
+            <div className="ml-auto flex items-center gap-2">
+              <span className="text-gray-600">Base currency:</span>
+              <span className="inline-flex items-center rounded border px-2 py-0.5 text-[11px] text-gray-700 bg-gray-50 border-gray-200">{baseCurrency}</span>
+            </div>
           </div>
         )}
         <div className="mt-3 flex items-center gap-3">
@@ -390,22 +422,39 @@ export default function CreateTrip({ trip }: CreateTripProps) {
           {itineraryDays.map((date) => {
             const [dayName, monthAndDay] = dateFormatter.format(date).split(", ");
             const [month, dayNumberStr] = monthAndDay.split(" ");
+            const dayKey = date.toDateString();
+            const dayExpenses = expensesByDay.get(dayKey) ?? [];
+            const dayPlaces = getPlacesForDate(date).map(p => ({ id: p.id, name: p.name }));
 
             return (
-              <ItineraryDate
-                key={date.toISOString()}
-                tripId={trip.id}
-                date={date}
-                dayName={dayName}
-                month={month}
-                dayNumber={parseInt(dayNumberStr)}
-                initialPlaces={getPlacesForDate(date)}
-                initialBudgetCents={getBudgetForDate(date).amountCents}
-                currency={getBudgetForDate(date).currency}
-                onPlaceAdded={handlePlaceAddedToMap}
-                onPlaceDeleted={handlePlaceDeletedFromMap}
-                onReorder={(ids) => handleReorderForDate(date, ids)}
-              />
+              <div key={date.toISOString()} className="space-y-3">
+                <ItineraryDate
+                  tripId={trip.id}
+                  date={date}
+                  dayName={dayName}
+                  month={month}
+                  dayNumber={parseInt(dayNumberStr)}
+                  initialPlaces={getPlacesForDate(date)}
+                  initialBudgetCents={getBudgetForDate(date).amountCents}
+                  currency={getBudgetForDate(date).currency}
+                  onPlaceAdded={handlePlaceAddedToMap}
+                  onPlaceDeleted={handlePlaceDeletedFromMap}
+                  onReorder={(ids) => handleReorderForDate(date, ids)}
+                />
+                <div className="-mt-1">
+                  <DayExpenses
+                    tripId={trip.id}
+                    date={date}
+                    baseCurrency={baseCurrency}
+                    rateMap={rateMap}
+                    onAdd={addExpense}
+                    onDelete={deleteExpense}
+                    onSetRate={setCurrencyRate}
+                    places={dayPlaces}
+                    expenses={dayExpenses}
+                  />
+                </div>
+              </div>
             );
           })}
         </div>

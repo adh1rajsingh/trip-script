@@ -15,8 +15,20 @@ import {
   X 
 } from "lucide-react";
 
+type TripSummary = {
+  id: string;
+  userId: string;
+  destination: string;
+  startDate: Date | null;
+  endDate: Date | null;
+  isPublic: boolean;
+  shareId: string | null;
+  createdAt: Date;
+  updatedAt: Date;
+};
+
 interface TripCardProps {
-  trip: typeof trips.$inferSelect;
+  trip: TripSummary | typeof trips.$inferSelect;
 }
 
 export default function TripCard({ trip }: TripCardProps) {

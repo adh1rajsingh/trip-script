@@ -22,6 +22,8 @@ export const trips = pgTable('trips', {
   destination: text('destination').notNull(),
   startDate: timestamp('start_date'),
   endDate: timestamp('end_date'),
+  // Budget/finance
+  baseCurrency: text('base_currency').notNull().default('USD'),
   // Sharing fields
   isPublic: boolean('is_public').notNull().default(false),
   shareId: uuid('share_id').unique(),
@@ -36,6 +38,8 @@ export const tripsRelations = relations(trips, ({ one, many }) => ({
   }),
   itineraryItems: many(itineraryItems),
   dailyBudgets: many(dailyBudgets),
+  expenses: many(expenses),
+  currencyRates: many(currencyRates),
 }));
 
 export const itineraryItems = pgTable('itinerary_items', {
@@ -86,6 +90,53 @@ export const dailyBudgets = pgTable('daily_budgets', {
 export const dailyBudgetsRelations = relations(dailyBudgets, ({ one }) => ({
   trip: one(trips, {
     fields: [dailyBudgets.tripId],
+    references: [trips.id],
+  }),
+}));
+
+// Logged expenses (actual spend)
+export const expenses = pgTable('expenses', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  tripId: uuid('trip_id').references(() => trips.id, { onDelete: 'cascade' }).notNull(),
+  // Optional link to an itinerary place
+  itineraryItemId: uuid('itinerary_item_id').references(() => itineraryItems.id, { onDelete: 'set null' }),
+  date: timestamp('date').notNull(),
+  amountCents: integer('amount_cents').notNull(),
+  currency: text('currency').notNull(),
+  category: text('category').notNull(),
+  note: text('note'),
+  receiptUrl: text('receipt_url'),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+});
+
+export const expensesRelations = relations(expenses, ({ one }) => ({
+  trip: one(trips, {
+    fields: [expenses.tripId],
+    references: [trips.id],
+  }),
+  itineraryItem: one(itineraryItems, {
+    fields: [expenses.itineraryItemId],
+    references: [itineraryItems.id],
+  }),
+}));
+
+// Per-trip currency conversion rates to base currency
+export const currencyRates = pgTable('currency_rates', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  tripId: uuid('trip_id').references(() => trips.id, { onDelete: 'cascade' }).notNull(),
+  currency: text('currency').notNull(),
+  // 1 unit of `currency` equals `rate` units of base currency
+  rateToBase: doublePrecision('rate_to_base').notNull(),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+}, (table) => [
+  unique('currency_rates_trip_currency_unique').on(table.tripId, table.currency),
+]);
+
+export const currencyRatesRelations = relations(currencyRates, ({ one }) => ({
+  trip: one(trips, {
+    fields: [currencyRates.tripId],
     references: [trips.id],
   }),
 }));
