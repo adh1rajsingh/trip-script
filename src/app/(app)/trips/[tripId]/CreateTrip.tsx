@@ -11,7 +11,15 @@ import { useToast } from "@/components/ui/toast";
 
 const TripMap = dynamic(() => import("@/components/TripMap"), { ssr: false });
 
-type MapPoint = { id: string; name: string; lat: number; lng: number; address?: string | null };
+type MapPoint = {
+  id: string;
+  name: string;
+  lat: number;
+  lng: number;
+  address?: string | null;
+  dayIndex?: number;
+  order?: number;
+};
 
 interface CreateTripProps {
   trip: typeof trips.$inferSelect & {
@@ -242,6 +250,29 @@ export default function CreateTrip({ trip }: CreateTripProps) {
     setPoints((prev) => prev.filter((pt) => pt.id !== placeId));
   };
 
+  // When a day's order changes (drag/optimize), update that day's point orders so the map updates
+  const handleReorderForDate = (date: Date, orderedIds: string[]) => {
+    // Find the 0-based day index for this date
+    const dayIdx = itineraryDays.findIndex((d) => d.toDateString() === new Date(date).toDateString());
+    if (dayIdx === -1) return;
+
+    setPoints((prev) => {
+      // Keep only ids that correspond to geo points on this day
+      const dayGeoIds = orderedIds.filter((id) => prev.some((p) => p.id === id && p.dayIndex === dayIdx));
+      const pos = new Map<string, number>(dayGeoIds.map((id, i) => [id, i]));
+      let changed = false;
+      const next = prev.map((p) => {
+        if (p.dayIndex !== dayIdx) return p;
+        const newOrder = pos.get(p.id);
+        if (newOrder == null) return p;
+        if (p.order === newOrder) return p;
+        changed = true;
+        return { ...p, order: newOrder };
+      });
+      return changed ? next : prev;
+    });
+  };
+
   // Try to guess center from destination (fallback)
   const mapCenter = points[0] ? { lat: points[0].lat, lng: points[0].lng } : undefined;
 
@@ -373,6 +404,7 @@ export default function CreateTrip({ trip }: CreateTripProps) {
                 currency={getBudgetForDate(date).currency}
                 onPlaceAdded={handlePlaceAddedToMap}
                 onPlaceDeleted={handlePlaceDeletedFromMap}
+                onReorder={(ids) => handleReorderForDate(date, ids)}
               />
             );
           })}
