@@ -3,7 +3,7 @@
 import { auth } from "@clerk/nextjs/server";
 import { db } from "@/db";
 import { users, trips, tripCollaborators, tripActivity, pendingInvitations } from "@/db/schema";
-import { eq, and, or } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { triggerCollaboratorUpdate } from "@/lib/pusher";
 import { randomBytes } from "crypto";

@@ -24,7 +24,7 @@ export default function AcceptInviteClient({
             <Users className="w-16 h-16" />
           </div>
           <h1 className="text-3xl font-bold text-center mb-2">
-            You're Invited!
+            You&apos;re Invited!
           </h1>
           <p className="text-center text-blue-100">
             Join this trip and start collaborating
@@ -114,7 +114,7 @@ export default function AcceptInviteClient({
               </SignInButton>
 
               <p className="text-center text-sm text-gray-500">
-                Don't have an account?{" "}
+                Don&apos;t have an account?{" "}
                 <SignInButton mode="modal" forceRedirectUrl={window.location.href}>
                   <button className="text-blue-600 hover:text-blue-700 font-semibold">
                     Sign up with {email}

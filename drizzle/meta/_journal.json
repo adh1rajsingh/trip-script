@@ -43,6 +43,13 @@
       "when": 1759452508021,
       "tag": "0005_slimy_lizard",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1759453985395,
+      "tag": "0006_amused_captain_stacy",
+      "breakpoints": true
     }
   ]
 }

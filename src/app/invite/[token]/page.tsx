@@ -3,6 +3,7 @@ import { pendingInvitations, users, tripCollaborators, trips } from "@/db/schema
 import { eq, and } from "drizzle-orm";
 import { redirect } from "next/navigation";
 import { auth } from "@clerk/nextjs/server";
+import Link from "next/link";
 import AcceptInviteClient from "./AcceptInviteClient";
 
 interface AcceptInvitePageProps {
@@ -30,12 +31,12 @@ export default async function AcceptInvitePage({ params }: AcceptInvitePageProps
           <p className="text-gray-600 mb-6">
             This invitation link is invalid or has expired.
           </p>
-          <a
+          <Link
             href="/"
             className="inline-block px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
           >
             Go to Home
-          </a>
+          </Link>
         </div>
       </div>
     );
@@ -46,16 +47,16 @@ export default async function AcceptInvitePage({ params }: AcceptInvitePageProps
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
         <div className="max-w-md w-full bg-white rounded-lg shadow-lg p-8 text-center">
-          <h1 className="text-2xl font-bold text-red-600 mb-4">Invitation Expired</h1>
+          <h1 className="text-2xl font-bold text-yellow-600 mb-4">Invitation Expired</h1>
           <p className="text-gray-600 mb-6">
-            This invitation has expired. Please ask the trip owner to send a new invitation.
+            This invitation has expired. Please ask the trip owner to send you a new invitation.
           </p>
-          <a
+          <Link
             href="/"
             className="inline-block px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
           >
-            Go to Home
-          </a>
+            Go to Dashboard
+          </Link>
         </div>
       </div>
     );
@@ -76,12 +77,12 @@ export default async function AcceptInvitePage({ params }: AcceptInvitePageProps
           <p className="text-gray-600 mb-6">
             The trip associated with this invitation no longer exists.
           </p>
-          <a
+          <Link
             href="/"
             className="inline-block px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
           >
             Go to Home
-          </a>
+          </Link>
         </div>
       </div>
     );
@@ -103,19 +104,19 @@ export default async function AcceptInvitePage({ params }: AcceptInvitePageProps
             <div className="max-w-md w-full bg-white rounded-lg shadow-lg p-8 text-center">
               <h1 className="text-2xl font-bold text-yellow-600 mb-4">Email Mismatch</h1>
               <p className="text-gray-600 mb-4">
-                This invitation was sent to <strong>{invitation.email}</strong>, but you're logged in as{" "}
+                This invitation was sent to <strong>{invitation.email}</strong>, but you&apos;re logged in as{" "}
                 <strong>{currentUser.email}</strong>.
               </p>
               <p className="text-gray-600 mb-6">
                 Please log out and sign in with the invited email address, or ask the trip owner to send
                 a new invitation to your current email.
               </p>
-              <a
+              <Link
                 href="/"
                 className="inline-block px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
               >
-                Go to Home
-              </a>
+                Go to Dashboard
+              </Link>
             </div>
           </div>
         );
