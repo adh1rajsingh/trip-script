@@ -6,7 +6,6 @@ import { users, trips, tripCollaborators, tripActivity, pendingInvitations } fro
 import { eq, and } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { triggerCollaboratorUpdate } from "@/lib/pusher";
-import { randomBytes } from "crypto";
 
 export async function inviteCollaborator(
   tripId: string,
@@ -135,8 +134,13 @@ export async function inviteCollaborator(
     throw new Error("Invitation already sent to this email");
   }
 
-  // Generate secure token for invitation
-  const token = randomBytes(32).toString("hex");
+  // Generate secure token for invitation using Web Crypto API
+  const tokenBytes = new Uint8Array(32);
+  crypto.getRandomValues(tokenBytes);
+  const token = Array.from(tokenBytes)
+    .map(b => b.toString(16).padStart(2, '0'))
+    .join('');
+  
   const expiresAt = new Date();
   expiresAt.setDate(expiresAt.getDate() + 7); // 7 days expiration
 
@@ -162,7 +166,11 @@ export async function inviteCollaborator(
   revalidatePath(`/trips/${tripId}`);
   
   // Return invitation link that user can share
-  const inviteLink = `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/invite/${token}`;
+  // In production, NEXT_PUBLIC_APP_URL should be set, otherwise fall back to Vercel URL
+  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 
+                  process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 
+                  'http://localhost:3000';
+  const inviteLink = `${baseUrl}/invite/${token}`;
   
   return { 
     success: true, 
