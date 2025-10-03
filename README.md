@@ -79,7 +79,7 @@ A modern trip planning application built with Next.js that helps users discover,
    # Ensure DATABASE_URL is set in .env.local
    npm run seed
    ```
-   This creates a demo user, a 5-day Paris trip with itinerary items, daily budgets, sample expenses in multiple currencies, and currency rates. It prints URLs you can open.
+   This creates a demo user, a 5-day Paris trip with itinerary items. It prints URLs you can open.
 
 6. **Run the development server**
    ```bash
@@ -89,7 +89,7 @@ A modern trip planning application built with Next.js that helps users discover,
 7. **Open your browser**
    Navigate to `http://localhost:3000`
 
-Note: If you see UI for expenses/rates but inserts fail, your database may be missing the latest columns/tables (e.g., trips.base_currency, expenses, currency_rates). Apply the migrations to the correct database configured in DATABASE_URL, then re-run the seed.
+
 
 ## Project Structure
 

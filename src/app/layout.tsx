@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Poppins, Open_Sans } from "next/font/google";
+import { Inter, Crimson_Text } from "next/font/google";
 import "./globals.css";
 import {
   ClerkProvider,
@@ -11,17 +11,20 @@ import {
 } from "@clerk/nextjs";
 import Link from "next/link";
 import { ToastProvider } from "@/components/ui/toast";
+import NavigationBehavior from "@/components/NavigationBehavior";
 
-const poppins = Poppins({
-  variable: "--font-poppins",
+const inter = Inter({
+  variable: "--font-inter",
   subsets: ["latin"],
-  weight: ["400", "600", "700"],
+  weight: ["400", "500", "600"],
+  display: 'swap',
 });
 
-const openSans = Open_Sans({
-  variable: "--font-open-sans",
+const crimsonText = Crimson_Text({
+  variable: "--font-crimson",
   subsets: ["latin"],
   weight: ["400", "600"],
+  display: 'swap',
 });
 
 export const metadata: Metadata = {
@@ -39,103 +42,62 @@ export default function RootLayout({
     <ClerkProvider>
       <html lang="en" suppressHydrationWarning>
         <body
-          className={`${poppins.variable} ${openSans.variable} antialiased` } suppressHydrationWarning
+          className={`${inter.variable} ${crimsonText.variable} antialiased`} 
+          suppressHydrationWarning
         >
           <ToastProvider>
+            <NavigationBehavior />
             {/* Navigation Bar */}
-            <nav className="navbar px-6 py-4 sticky top-0 z-50" style={{ backgroundColor: '#FFFFFF' }}>
-              <div className="max-w-7xl mx-auto flex justify-between items-center">
-                <div className="flex items-center">
-                  <Link href="/dashboard">
-                    <h1 
-                      className="text-xl md:text-2xl font-bold cursor-pointer hover:opacity-80 transition-opacity"
-                      style={{ 
-                        fontFamily: 'var(--font-poppins)', 
-                        color: '#2C3E2C',
-                        fontWeight: '700'
-                      }}
-                    >
-                      TripScript
-                    </h1>
-                  </Link>
-                </div>
-                
-                {/* Navigation and Auth Buttons */}
-                <div className="flex items-center space-x-4">
-                  {/* Dashboard/Get Started Button */}
-                  <SignedIn>
-                    <Link href="/dashboard">
-                      <button
-                        className="px-4 py-2 text-sm font-medium rounded-md transition-all duration-200 hover:bg-gray-100"
-                        style={{
-                          color: "#2C3E2C",
-                          fontFamily: "var(--font-open-sans)",
-                          fontWeight: "600",
-                        }}
-                      >
-                        Dashboard
-                      </button>
+            <nav className="navbar">
+              <div className="container">
+                <div className="flex justify-between items-center py-4">
+                  <div className="flex items-center">
+                    <Link href="/dashboard" className="focus-ring">
+                      <h1 className="text-h3 hover:opacity-80 transition-opacity cursor-pointer">
+                        TripScript
+                      </h1>
                     </Link>
-                  </SignedIn>
+                  </div>
                   
-                  <SignedOut>
-                    <SignInButton 
-                      mode="redirect"
-                      forceRedirectUrl="/dashboard"
-                    >
-                      <button
-                        className="px-4 py-2 text-sm font-medium rounded-md transition-all duration-200 hover:bg-gray-100"
-                        style={{
-                          color: "#2C3E2C",
-                          fontFamily: "var(--font-open-sans)",
-                          fontWeight: "600",
-                        }}
+                  {/* Navigation and Auth Buttons */}
+                  <div className="flex items-center gap-4">
+                    <SignedIn>
+                      <Link href="/dashboard">
+                        <button className="btn-secondary text-sm">
+                          Dashboard
+                        </button>
+                      </Link>
+                    </SignedIn>
+                    
+                    <SignedOut>
+                      <SignInButton 
+                        mode="redirect"
+                        forceRedirectUrl="/dashboard"
                       >
-                        Get Started
-                      </button>
-                    </SignInButton>
-                    <SignInButton 
-                      mode="redirect"
-                      forceRedirectUrl="/dashboard"
-                    >
-                      <button
-                        className="px-4 py-2 text-sm font-medium rounded-md transition-all duration-200 hover:bg-gray-100"
-                        style={{
-                          color: "#2C3E2C",
-                          fontFamily: "var(--font-open-sans)",
-                          fontWeight: "600",
-                        }}
+                        <button className="btn-secondary text-sm">
+                          Sign In
+                        </button>
+                      </SignInButton>
+                      <SignUpButton 
+                        mode="redirect"
+                        forceRedirectUrl="/dashboard"
                       >
-                        Login
-                      </button>
-                    </SignInButton>
-                    <SignUpButton 
-                      mode="redirect"
-                      forceRedirectUrl="/dashboard"
-                    >
-                      <button
-                        className="px-4 py-2 text-sm font-medium rounded-md transition-all duration-200"
-                        style={{
-                          backgroundColor: "#FF6B35",
-                          color: "white",
-                          fontFamily: "var(--font-open-sans)",
-                          fontWeight: "600",
+                        <button className="btn-primary text-sm">
+                          Get Started
+                        </button>
+                      </SignUpButton>
+                    </SignedOut>
+                    
+                    <SignedIn>
+                      <UserButton 
+                        appearance={{
+                          elements: {
+                            avatarBox: "w-8 h-8 rounded-full"
+                          }
                         }}
-                      >
-                        Sign Up
-                      </button>
-                    </SignUpButton>
-                  </SignedOut>
-                  
-                  <SignedIn>
-                    <UserButton 
-                      appearance={{
-                        elements: {
-                          avatarBox: "w-8 h-8"
-                        }
-                      }}
-                    />
-                  </SignedIn>
+                      />
+                    </SignedIn>
+                  </div>
                 </div>
               </div>
             </nav>

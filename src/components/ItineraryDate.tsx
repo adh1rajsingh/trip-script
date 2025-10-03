@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { addPlaceToItinerary } from "@/app/actions/addPlaceToItinerary";
 import { deletePlaceFromItinerary } from "@/app/actions/deletePlaceFromItinerary";
 import { updateItineraryOrder } from "@/app/actions/updateItineraryOrder";
-import { Trash2, MapPin, Wallet } from "lucide-react";
+import { Trash2, MapPin } from "lucide-react";
 import { useToast } from "@/components/ui/toast";
 import {
   DndContext,
@@ -29,8 +29,6 @@ interface ItineraryDateProps {
   month: string;
   dayNumber: number;
   initialPlaces?: Place[];
-  initialBudgetCents?: number;
-  currency?: string;
   onPlaceAdded?: (place: Place & { date?: Date; order?: number }) => void;
   onPlaceDeleted?: (placeId: string) => void;
   onReorder?: (placeIdsInOrder: string[]) => void;
@@ -43,11 +41,8 @@ interface Place {
   latitude?: number | null;
   longitude?: number | null;
   address?: string | null;
-  costCents?: number | null;
-  costCurrency?: string | null;
 }
-import { setDailyBudget } from "@/app/actions/setDailyBudget";
-import { updatePlaceCost } from "@/app/actions/updatePlaceCost";
+
 
 function SortableItem({ id, children }: { id: string; children: React.ReactNode }) {
   const { attributes, listeners, setNodeRef, transform, transition } = useSortable({ id });
@@ -70,15 +65,11 @@ export default function ItineraryDate({
   month,
   dayNumber,
   initialPlaces = [],
-  initialBudgetCents = 0,
-  currency = "USD",
   onPlaceAdded,
   onPlaceDeleted,
   onReorder,
 }: ItineraryDateProps) {
   const [places, setPlaces] = useState<Place[]>(initialPlaces);
-  const [budgetCents, setBudgetCents] = useState<number>(initialBudgetCents);
-  const [savingBudget, setSavingBudget] = useState(false);
   const [isAddingPlace, setIsAddingPlace] = useState(false);
   const [newPlaceName, setNewPlaceName] = useState("");
   const [newPlaceDescription, setNewPlaceDescription] = useState("");
@@ -335,23 +326,7 @@ export default function ItineraryDate({
     void persistOrder(ids);
   };
 
-  // Budget helpers
-  const daySpendCents = places.reduce((sum, p) => sum + (p.costCents ?? 0), 0);
-  const remainingCents = (budgetCents || 0) - daySpendCents;
-  const fmt = (c: number) => `${currency} ${(c / 100).toFixed(2)}`;
-  const saveBudget = async () => {
-    setSavingBudget(true);
-    try {
-      const res = await setDailyBudget({ tripId, date, amountCents: Math.max(0, Math.round(budgetCents || 0)), currency });
-      if (res.success) {
-        showToast({ title: "Budget saved", variant: "success" });
-      } else {
-        showToast({ title: "Failed to save budget", description: res.error, variant: "error" });
-      }
-    } finally {
-      setSavingBudget(false);
-    }
-  };
+
 
   const optimizeRoute = async () => {
     const current = places;
@@ -443,47 +418,7 @@ export default function ItineraryDate({
         </div>
       </div>
 
-      <div className="mb-6 bg-white border border-gray-200 rounded-lg p-4 shadow-sm grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 items-start overflow-hidden">
-        <div className="flex items-center gap-3 text-sm flex-wrap min-w-0">
-          <Wallet className="w-4 h-4 text-blue-600" />
-          <span className="text-gray-700">Budget</span>
-          <input
-            type="number"
-            min={0}
-            step={1}
-            value={Math.round((budgetCents || 0) / 100)}
-            inputMode="numeric"
-            pattern="[0-9]*"
-            onChange={(e) => {
-              // Normalize to digits only and strip leading zeros
-              const raw = e.target.value;
-              const digits = raw.replace(/\D+/g, "");
-              const normalized = digits.replace(/^0+(\d)/, "$1");
-              const units = normalized === "" ? 0 : parseInt(normalized, 10);
-              setBudgetCents(Math.max(0, units * 100));
-            }}
-            onFocus={(e) => e.currentTarget.select()}
-            className="w-28 border rounded px-2 py-1 text-sm"
-            aria-label="Daily budget"
-          />
-          <span className="inline-flex items-center rounded border px-2 py-0.5 text-[11px] text-gray-700 bg-gray-50 border-gray-200">{currency}</span>
-          <button
-            type="button"
-            onClick={saveBudget}
-            disabled={savingBudget}
-            className="text-xs px-3 py-1 border rounded hover:bg-gray-50"
-          >
-            {savingBudget ? "Saving..." : "Save"}
-          </button>
-        </div>
-  <div className="text-sm flex items-center gap-x-3 gap-y-1 justify-start sm:justify-end flex-wrap min-w-0">
-          <span className="text-gray-700">Spent: </span>
-          <span>{fmt(daySpendCents)}</span>
-          <span className="text-gray-300">|</span>
-          <span className="text-gray-700">Remaining: </span>
-          <span className={remainingCents < 0 ? "text-red-600 font-medium" : "text-green-700"}>{fmt(remainingCents)}</span>
-        </div>
-      </div>
+
 
       <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
         <SortableContext items={places.map((p) => p.id)} strategy={verticalListSortingStrategy}>
@@ -498,39 +433,7 @@ export default function ItineraryDate({
                       {place.description && (
                         <p className="text-gray-500 text-sm">{place.description}</p>
                       )}
-                      <div className="mt-1 text-xs text-gray-600 flex items-center gap-2">
-                        <label className="inline-flex items-center gap-1">
-                          <span>Cost</span>
-                          <input
-                            type="text"
-                            inputMode="numeric"
-                            pattern="[0-9]*"
-                            defaultValue={place.costCents ? Math.round(place.costCents / 100).toString() : ""}
-                            placeholder="0"
-                            className="w-24 border rounded px-1.5 py-0.5 text-xs"
-                            onFocus={(e) => e.currentTarget.select()}
-                            onBlur={async (e) => {
-                              const raw = e.currentTarget.value;
-                              const digits = raw.replace(/\D+/g, "");
-                              const normalized = digits.replace(/^0+(\d)/, "$1");
-                              const unitsStr = normalized === "" ? "" : String(parseInt(normalized, 10));
-                              e.currentTarget.value = unitsStr;
-                              const cents = unitsStr === "" ? null : Math.max(0, parseInt(unitsStr, 10) * 100);
-                              const prev = place.costCents ?? null;
-                              if (cents === prev) return;
-                              const res = await updatePlaceCost({ tripId, placeId: place.id, costCents: cents, currency });
-                              if (res.success) {
-                                setPlaces((curr) => curr.map((p) => (p.id === place.id ? { ...p, costCents: cents, costCurrency: cents == null ? null : currency } : p)));
-                                showToast({ title: "Cost updated", variant: "success" });
-                              } else {
-                                showToast({ title: "Failed to update cost", description: res.error, variant: "error" });
-                              }
-                            }}
-                          />
-                          <span>{currency}</span>
-                        </label>
-                        {place.costCents != null && <span>— {fmt(place.costCents)}</span>}
-                      </div>
+
                     </div>
                   </div>
                   <button

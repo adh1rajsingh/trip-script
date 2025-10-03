@@ -5,6 +5,7 @@ import { users, trips } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import Link from "next/link";
 import TripCard from "@/components/TripCard";
+import { Plus, Compass } from "lucide-react";
 
 export default async function TripsPage() {
   const { userId: clerkUserId } = await auth();
@@ -18,38 +19,40 @@ export default async function TripsPage() {
     .from(users)
     .where(eq(users.clerkId, clerkUserId))
     .limit(1);
-//no trips yet
+
+  // User doesn't exist yet
   if (user.length === 0) {
     return (
-      <div className="min-h-screen bg-gray-50 py-12 px-4">
-        <div className="max-w-6xl mx-auto">
-          <div className="flex justify-between items-center mb-8">
-            <h1 className="text-4xl font-bold text-gray-900">Your Trips</h1>
-            <Link
-              href="/trips/newtrip"
-              className="bg-red-500 hover:bg-red-600 text-white font-semibold py-3 px-6 rounded-lg transition-colors duration-200"
-            >
-              Plan New Trip
-            </Link>
-          </div>
+      <main className="min-h-screen section-spacing-sm">
+        <div className="container">
+          <div className="vertical-rhythm-lg">
+            <div className="flex justify-between items-center">
+              <h1 className="text-h1">Your Trips</h1>
+              <Link href="/trips/newtrip" className="btn-primary">
+                <Plus className="w-4 h-4" />
+                Plan New Trip
+              </Link>
+            </div>
 
-          <div className="text-center py-16">
-            <div className="text-6xl mb-4">🌍</div>
-            <h2 className="text-2xl font-semibold text-gray-700 mb-4">
-              Welcome to TripScript!
-            </h2>
-            <p className="text-gray-500 mb-8">
-              Start planning your first adventure!
-            </p>
-            <Link
-              href="/trips/newtrip"
-              className="bg-red-500 hover:bg-red-600 text-white font-semibold py-3 px-8 rounded-lg transition-colors duration-200"
-            >
-              Create Your First Trip
-            </Link>
+            <div className="text-center py-24">
+              <div className="mb-8">
+                <Compass className="w-16 h-16 mx-auto" style={{ color: 'var(--color-text-muted)' }} />
+              </div>
+              <h2 className="text-h2 mb-4">Welcome to TripScript!</h2>
+              <p className="text-body mb-8" style={{ color: 'var(--color-text-secondary)' }}>
+                Ready to start your journey? Create your first trip and begin planning your next adventure.
+              </p>
+              <Link href="/trips/newtrip" className="btn-primary" style={{ 
+                padding: 'var(--space-4) var(--space-8)',
+                fontSize: 'var(--text-lg)'
+              }}>
+                <Plus className="w-5 h-5" />
+                Create Your First Trip
+              </Link>
+            </div>
           </div>
         </div>
-      </div>
+      </main>
     );
   }
 
@@ -71,55 +74,71 @@ export default async function TripsPage() {
       .orderBy(trips.createdAt);
 
     return (
-      <div className="min-h-screen bg-gray-50 py-12 px-4">
-        <div className="max-w-6xl mx-auto">
-          <div className="flex justify-between items-center mb-8">
-            <h1 className="text-4xl font-bold text-gray-900">Your Trips</h1>
-            <Link
-              href="/trips/newtrip"
-              className="bg-red-500 hover:bg-red-600 text-white font-semibold py-3 px-6 rounded-lg transition-colors duration-200"
-            >
-              Plan New Trip
-            </Link>
-          </div>
-
-          {userTrips.length === 0 ? (
-            <div className="text-center py-16">
-              <div className="text-6xl mb-4">🌍</div>
-              <h2 className="text-2xl font-semibold text-gray-700 mb-4">
-                No trips yet
-              </h2>
-              <p className="text-gray-500 mb-8">
-                Start planning your first adventure!
-              </p>
-              <Link
-                href="/trips/newtrip"
-                className="bg-red-500 hover:bg-red-600 text-white font-semibold py-3 px-8 rounded-lg transition-colors duration-200"
-              >
-                Create Your First Trip
+      <main className="min-h-screen section-spacing-sm">
+        <div className="container">
+          <div className="vertical-rhythm-lg">
+            <div className="flex justify-between items-center">
+              <div>
+                <h1 className="text-h1 mb-2">Your Trips</h1>
+                <p className="text-body" style={{ color: 'var(--color-text-secondary)' }}>
+                  {userTrips.length === 0 
+                    ? "Ready to plan your first adventure?" 
+                    : `${userTrips.length} trip${userTrips.length === 1 ? '' : 's'} planned`
+                  }
+                </p>
+              </div>
+              <Link href="/trips/newtrip" className="btn-primary">
+                <Plus className="w-4 h-4" />
+                Plan New Trip
               </Link>
             </div>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {userTrips.map((trip) => (
-                <TripCard key={trip.id} trip={trip} />
-              ))}
-            </div>
-          )}
+
+            {userTrips.length === 0 ? (
+              <div className="text-center py-24">
+                <div className="mb-8">
+                  <Compass className="w-16 h-16 mx-auto" style={{ color: 'var(--color-text-muted)' }} />
+                </div>
+                <h2 className="text-h2 mb-4">No trips yet</h2>
+                <p className="text-body mb-8" style={{ color: 'var(--color-text-secondary)' }}>
+                  Your adventures begin here. Create your first trip and start building amazing memories.
+                </p>
+                <Link href="/trips/newtrip" className="btn-primary" style={{ 
+                  padding: 'var(--space-4) var(--space-8)',
+                  fontSize: 'var(--text-lg)'
+                }}>
+                  <Plus className="w-5 h-5" />
+                  Create Your First Trip
+                </Link>
+              </div>
+            ) : (
+              <div className="grid-responsive">
+                {userTrips.map((trip) => (
+                  <TripCard key={trip.id} trip={trip} />
+                ))}
+              </div>
+            )}
+          </div>
         </div>
-      </div>
+      </main>
     );
   } catch (error) {
     console.error("Error fetching trips:", error);
     return (
-      <div className="min-h-screen bg-gray-50 py-12 px-4">
-        <div className="max-w-6xl mx-auto text-center">
-          <h1 className="text-2xl font-bold text-red-600 mb-4">
-            Error loading trips
-          </h1>
-          <p className="text-gray-600">Please try again later.</p>
+      <main className="min-h-screen section-spacing-sm">
+        <div className="container text-center">
+          <div className="vertical-rhythm">
+            <h1 className="text-h2" style={{ color: 'var(--color-error)' }}>
+              Error loading trips
+            </h1>
+            <p className="text-body" style={{ color: 'var(--color-text-secondary)' }}>
+              We&apos;re having trouble loading your trips. Please refresh the page or try again later.
+            </p>
+            <Link href="/dashboard" className="btn-secondary">
+              Back to Dashboard
+            </Link>
+          </div>
         </div>
-      </div>
+      </main>
     );
   }
 }

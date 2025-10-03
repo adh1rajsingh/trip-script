@@ -3,9 +3,10 @@
 import { auth } from "@clerk/nextjs/server";
 import { redirect } from "next/navigation";
 import { db } from "@/db";
-import { users, trips, itineraryItems } from "@/db/schema";
+import { users, trips, itineraryItems, tripActivity } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
+import { triggerTripUpdate } from "@/lib/pusher";
 
 interface AddPlaceToItineraryParams {
   tripId: string;
@@ -111,6 +112,22 @@ export async function addPlaceToItinerary({
         order: maxOrder + 1,
       })
       .returning();
+
+    // Log activity
+    await db.insert(tripActivity).values({
+      tripId,
+      userId: user[0].id,
+      action: "added_item",
+      entityType: "itinerary_item",
+      entityId: newItineraryItem.id,
+      metadata: JSON.stringify({ name: newPlaceName }),
+    });
+
+    // Trigger real-time update
+    await triggerTripUpdate(tripId, {
+      type: "itinerary-item-added",
+      item: newItineraryItem,
+    });
 
     revalidatePath(`/trips/${tripId}`);
     revalidatePath("/trips");

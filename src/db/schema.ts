@@ -1,5 +1,5 @@
 import { relations } from "drizzle-orm";
-import { doublePrecision, integer, pgTable, text, timestamp, uuid, boolean, unique } from "drizzle-orm/pg-core";
+import { doublePrecision, integer, pgTable, text, timestamp, uuid, boolean } from "drizzle-orm/pg-core";
 
 export const users = pgTable('users', {
   id: uuid('id').primaryKey().defaultRandom(),
@@ -13,6 +13,9 @@ export const users = pgTable('users', {
 
 export const usersRelations = relations(users, ({ many }) => ({
   trips: many(trips),
+  tripCollaborations: many(tripCollaborators),
+  activities: many(tripActivity),
+  presences: many(userPresence),
 }));
 
 
@@ -22,8 +25,6 @@ export const trips = pgTable('trips', {
   destination: text('destination').notNull(),
   startDate: timestamp('start_date'),
   endDate: timestamp('end_date'),
-  // Budget/finance
-  baseCurrency: text('base_currency').notNull().default('USD'),
   // Sharing fields
   isPublic: boolean('is_public').notNull().default(false),
   shareId: uuid('share_id').unique(),
@@ -37,9 +38,10 @@ export const tripsRelations = relations(trips, ({ one, many }) => ({
     references: [users.id],
   }),
   itineraryItems: many(itineraryItems),
-  dailyBudgets: many(dailyBudgets),
-  expenses: many(expenses),
-  currencyRates: many(currencyRates),
+  collaborators: many(tripCollaborators),
+  activities: many(tripActivity),
+  presences: many(userPresence),
+  pendingInvitations: many(pendingInvitations),
 }));
 
 export const itineraryItems = pgTable('itinerary_items', {
@@ -56,10 +58,6 @@ export const itineraryItems = pgTable('itinerary_items', {
   address: text('address'),
   
   order: integer('order').default(0).notNull(), 
-
-  // Optional cost for this place/experience (in minor units e.g., cents)
-  costCents: integer('cost_cents'),
-  costCurrency: text('cost_currency'),
   
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
@@ -73,70 +71,95 @@ export const itineraryItemsRelations = relations(itineraryItems, ({ one }) => ({
   }),
 }));
 
-// Per-day budget allocation for a trip
-export const dailyBudgets = pgTable('daily_budgets', {
+// Collaboration tables
+export const tripCollaborators = pgTable('trip_collaborators', {
   id: uuid('id').primaryKey().defaultRandom(),
   tripId: uuid('trip_id').references(() => trips.id, { onDelete: 'cascade' }).notNull(),
-  date: timestamp('date').notNull(),
-  // Budget in minor units (e.g., cents)
-  amountCents: integer('amount_cents').notNull().default(0),
-  currency: text('currency').notNull().default('USD'),
-  createdAt: timestamp('created_at').defaultNow().notNull(),
-  updatedAt: timestamp('updated_at').defaultNow().notNull(),
-}, (table) => [
-  unique('daily_budgets_trip_date_unique').on(table.tripId, table.date),
-]);
-
-export const dailyBudgetsRelations = relations(dailyBudgets, ({ one }) => ({
-  trip: one(trips, {
-    fields: [dailyBudgets.tripId],
-    references: [trips.id],
-  }),
-}));
-
-// Logged expenses (actual spend)
-export const expenses = pgTable('expenses', {
-  id: uuid('id').primaryKey().defaultRandom(),
-  tripId: uuid('trip_id').references(() => trips.id, { onDelete: 'cascade' }).notNull(),
-  // Optional link to an itinerary place
-  itineraryItemId: uuid('itinerary_item_id').references(() => itineraryItems.id, { onDelete: 'set null' }),
-  date: timestamp('date').notNull(),
-  amountCents: integer('amount_cents').notNull(),
-  currency: text('currency').notNull(),
-  category: text('category').notNull(),
-  note: text('note'),
-  receiptUrl: text('receipt_url'),
+  userId: uuid('user_id').references(() => users.id, { onDelete: 'cascade' }).notNull(),
+  role: text('role', { enum: ['owner', 'editor', 'viewer'] }).notNull().default('viewer'),
+  invitedBy: uuid('invited_by').references(() => users.id),
+  invitedAt: timestamp('invited_at').defaultNow().notNull(),
+  acceptedAt: timestamp('accepted_at'),
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
 });
 
-export const expensesRelations = relations(expenses, ({ one }) => ({
+export const tripCollaboratorsRelations = relations(tripCollaborators, ({ one }) => ({
   trip: one(trips, {
-    fields: [expenses.tripId],
+    fields: [tripCollaborators.tripId],
     references: [trips.id],
   }),
-  itineraryItem: one(itineraryItems, {
-    fields: [expenses.itineraryItemId],
-    references: [itineraryItems.id],
+  user: one(users, {
+    fields: [tripCollaborators.userId],
+    references: [users.id],
+  }),
+  inviter: one(users, {
+    fields: [tripCollaborators.invitedBy],
+    references: [users.id],
   }),
 }));
 
-// Per-trip currency conversion rates to base currency
-export const currencyRates = pgTable('currency_rates', {
+export const tripActivity = pgTable('trip_activity', {
   id: uuid('id').primaryKey().defaultRandom(),
   tripId: uuid('trip_id').references(() => trips.id, { onDelete: 'cascade' }).notNull(),
-  currency: text('currency').notNull(),
-  // 1 unit of `currency` equals `rate` units of base currency
-  rateToBase: doublePrecision('rate_to_base').notNull(),
+  userId: uuid('user_id').references(() => users.id, { onDelete: 'cascade' }).notNull(),
+  action: text('action').notNull(), // 'created', 'updated', 'deleted', 'added_item', 'removed_item', etc.
+  entityType: text('entity_type'), // 'trip', 'itinerary_item', 'collaborator'
+  entityId: uuid('entity_id'),
+  metadata: text('metadata'), // JSON string for additional details
   createdAt: timestamp('created_at').defaultNow().notNull(),
-  updatedAt: timestamp('updated_at').defaultNow().notNull(),
-}, (table) => [
-  unique('currency_rates_trip_currency_unique').on(table.tripId, table.currency),
-]);
+});
 
-export const currencyRatesRelations = relations(currencyRates, ({ one }) => ({
+export const tripActivityRelations = relations(tripActivity, ({ one }) => ({
   trip: one(trips, {
-    fields: [currencyRates.tripId],
+    fields: [tripActivity.tripId],
     references: [trips.id],
   }),
+  user: one(users, {
+    fields: [tripActivity.userId],
+    references: [users.id],
+  }),
 }));
+
+export const userPresence = pgTable('user_presence', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  tripId: uuid('trip_id').references(() => trips.id, { onDelete: 'cascade' }).notNull(),
+  userId: uuid('user_id').references(() => users.id, { onDelete: 'cascade' }).notNull(),
+  lastSeenAt: timestamp('last_seen_at').defaultNow().notNull(),
+  isActive: boolean('is_active').default(true).notNull(),
+});
+
+export const userPresenceRelations = relations(userPresence, ({ one }) => ({
+  trip: one(trips, {
+    fields: [userPresence.tripId],
+    references: [trips.id],
+  }),
+  user: one(users, {
+    fields: [userPresence.userId],
+    references: [users.id],
+  }),
+}));
+
+// Pending invitations for users who don't have accounts yet
+export const pendingInvitations = pgTable('pending_invitations', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  tripId: uuid('trip_id').references(() => trips.id, { onDelete: 'cascade' }).notNull(),
+  email: text('email').notNull(),
+  role: text('role', { enum: ['editor', 'viewer'] }).notNull().default('viewer'),
+  invitedBy: uuid('invited_by').references(() => users.id, { onDelete: 'cascade' }).notNull(),
+  token: text('token').notNull().unique(), // For secure access via link
+  expiresAt: timestamp('expires_at').notNull(),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+});
+
+export const pendingInvitationsRelations = relations(pendingInvitations, ({ one }) => ({
+  trip: one(trips, {
+    fields: [pendingInvitations.tripId],
+    references: [trips.id],
+  }),
+  inviter: one(users, {
+    fields: [pendingInvitations.invitedBy],
+    references: [users.id],
+  }),
+}));
+

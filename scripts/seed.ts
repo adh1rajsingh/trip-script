@@ -12,16 +12,7 @@ async function main() {
 
   const sql = postgres(url, { max: 1 });
 
-  // Helpers to make seed robust across environments
-  async function tableExists(table: string): Promise<boolean> {
-    const [row] = await sql`
-      SELECT EXISTS (
-        SELECT FROM information_schema.tables
-        WHERE table_schema = 'public' AND table_name = ${table}
-      ) AS exists
-    ` as unknown as Array<{ exists: boolean }>;
-    return !!row?.exists;
-  }
+
 
   async function columnExists(table: string, column: string): Promise<boolean> {
     const [row] = await sql`
@@ -81,17 +72,9 @@ async function main() {
   }
   const [trip] = await (tripInsertSql as unknown as Promise<TripRow[]>);
 
-  // 3) Per-day budgets
   const days: Date[] = [];
   for (let d = new Date(start); d <= end; d = new Date(d.getTime() + 24 * 60 * 60 * 1000)) {
     days.push(new Date(d));
-  }
-  for (let i = 0; i < days.length; i++) {
-    const d = days[i];
-    await sql`
-      insert into daily_budgets (trip_id, date, amount_cents, currency)
-      values (${trip.id}, ${d}, ${15000 + i * 1000}, 'USD')
-    `;
   }
 
   // 4) Itinerary items with geo for Paris
@@ -120,35 +103,9 @@ async function main() {
     }
   }
 
-  // 5) Currency rates
-  if (await tableExists('currency_rates')) {
-    await sql`insert into currency_rates (trip_id, currency, rate_to_base) values (${trip.id}, 'EUR', 1.09)`;
-    await sql`insert into currency_rates (trip_id, currency, rate_to_base) values (${trip.id}, 'GBP', 1.28)`;
-  } else {
-    console.warn('Skipping currency_rates seeding; table not found. Apply migrations to enable rates.');
-  }
 
-  // 6) Expenses
-  if (await tableExists('expenses')) {
-    const eiffel = insertedItems.find((i) => i.name.includes('Eiffel'));
-    const louvre = insertedItems.find((i) => i.name.includes('Louvre'));
-    const nd = insertedItems.find((i) => i.name.includes('Notre-Dame'));
 
-  await sql`
-      insert into expenses (trip_id, itinerary_item_id, date, amount_cents, currency, category, note)
-      values
-    (${trip.id}, ${eiffel?.id ?? null}, ${days[0]}, 2500, 'EUR', 'Transport', 'Taxi from CDG to hotel'),
-    (${trip.id}, ${null}, ${days[0]}, 4200, 'EUR', 'Food & Drink', 'Dinner near Eiffel'),
-    (${trip.id}, ${louvre?.id ?? null}, ${days[1]}, 1700, 'EUR', 'Fees', 'Louvre ticket'),
-    (${trip.id}, ${null}, ${days[1]}, 800, 'EUR', 'Transport', 'Metro day pass'),
-    (${trip.id}, ${nd?.id ?? null}, ${days[2]}, 1200, 'EUR', 'Food & Drink', 'Coffee & croissant'),
-    (${trip.id}, ${null}, ${days[2]}, 3500, 'USD', 'Shopping', 'Souvenirs'),
-    (${trip.id}, ${null}, ${days[3]}, 6900, 'EUR', 'Lodging', 'Hotel night'),
-    (${trip.id}, ${null}, ${days[4]}, 5500, 'GBP', 'Activities', 'Seine cruise via package')
-    `;
-  } else {
-    console.warn('Skipping expenses seeding; table not found. Apply migrations to enable expenses.');
-  }
+
 
   console.log('Demo user:', { id: user.id, clerkId: user.clerk_id, email: user.email });
   if (!providedClerkId) {

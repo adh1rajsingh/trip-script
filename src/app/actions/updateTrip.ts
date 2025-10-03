@@ -3,9 +3,10 @@
 import { auth } from "@clerk/nextjs/server";
 import { redirect } from "next/navigation";
 import { db } from "@/db";
-import { trips, users } from "@/db/schema";
+import { trips, users, tripActivity } from "@/db/schema";
 import { and, eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
+import { triggerTripUpdate } from "@/lib/pusher";
 
 interface UpdateTripParams {
   tripId: string;
@@ -74,6 +75,22 @@ export async function updateTrip({ tripId, destination, startDate, endDate }: Up
     }
 
     await db.update(trips).set(updateValues).where(eq(trips.id, tripId));
+
+    // Log activity
+    await db.insert(tripActivity).values({
+      tripId,
+      userId: user[0].id,
+      action: "updated",
+      entityType: "trip",
+      entityId: tripId,
+      metadata: JSON.stringify({ destination, startDate, endDate }),
+    });
+
+    // Trigger real-time update
+    await triggerTripUpdate(tripId, {
+      type: "trip-updated",
+      updates: updateValues,
+    });
 
     revalidatePath(`/trips/${tripId}`);
     revalidatePath("/trips");

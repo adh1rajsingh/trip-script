@@ -1,11 +1,12 @@
 "use server";
 
 import { db } from "@/db";
-import { itineraryItems, trips, users } from "@/db/schema";
+import { itineraryItems, trips, users, tripActivity } from "@/db/schema";
 import { eq, and } from "drizzle-orm";
 import { auth } from "@clerk/nextjs/server";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
+import { triggerTripUpdate } from "@/lib/pusher";
 
 interface DeletePlaceFromItineraryParams {
   placeId: string;
@@ -90,6 +91,22 @@ export async function deletePlaceFromItinerary({
     }
 
     await db.delete(itineraryItems).where(eq(itineraryItems.id, placeId));
+
+    // Log activity
+    await db.insert(tripActivity).values({
+      tripId,
+      userId: user[0].id,
+      action: "removed_item",
+      entityType: "itinerary_item",
+      entityId: placeId,
+      metadata: JSON.stringify({ name: place[0].name }),
+    });
+
+    // Trigger real-time update
+    await triggerTripUpdate(tripId, {
+      type: "itinerary-item-deleted",
+      placeId,
+    });
 
     revalidatePath(`/trips/${tripId}`);
     revalidatePath("/trips");

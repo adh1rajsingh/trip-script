@@ -8,8 +8,7 @@ import {
   MoreHorizontal, 
   Calendar, 
   Clock, 
-  Plus, 
-  ChevronRight, 
+  MapPin, 
   Trash2, 
   Loader2,
   X 
@@ -90,18 +89,29 @@ export default function TripCard({ trip }: TripCardProps) {
 
   return (
     <div className="relative">
-      <Link href={`/trips/${trip.id}`}>
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden hover:shadow-md transition-shadow duration-200 cursor-pointer">
-          <div className="bg-gradient-to-r from-blue-500 to-purple-600 px-6 py-4">
-            <h3 className="text-xl font-bold text-white truncate">
-              {trip.destination}
-            </h3>
-          </div>
+      <Link href={`/trips/${trip.id}`} className="focus-ring">
+        <article className="card hover-lift cursor-pointer">
+          <div className="vertical-rhythm">
+            {/* Header */}
+            <div className="flex items-start justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-lg flex items-center justify-center" 
+                     style={{ backgroundColor: 'var(--color-accent-light)' }}>
+                  <MapPin className="w-5 h-5" style={{ color: 'var(--color-accent)' }} />
+                </div>
+                <div>
+                  <h3 className="text-h3 line-clamp-1">{trip.destination}</h3>
+                  <div className="text-meta">
+                    Created {formatDate(trip.createdAt)}
+                  </div>
+                </div>
+              </div>
+            </div>
 
-          <div className="p-6">
+            {/* Trip Details */}
             <div className="space-y-3">
-              <div className="flex items-center text-gray-600">
-                <Calendar className="w-4 h-4 mr-2" />
+              <div className="flex items-center gap-2" style={{ color: 'var(--color-text-secondary)' }}>
+                <Calendar className="w-4 h-4" />
                 <span className="text-sm">
                   {trip.startDate && trip.endDate
                     ? `${formatDate(trip.startDate)} - ${formatDate(trip.endDate)}`
@@ -110,36 +120,39 @@ export default function TripCard({ trip }: TripCardProps) {
               </div>
 
               {getDuration() && (
-                <div className="flex items-center text-gray-600">
-                  <Clock className="w-4 h-4 mr-2" />
+                <div className="flex items-center gap-2" style={{ color: 'var(--color-text-secondary)' }}>
+                  <Clock className="w-4 h-4" />
                   <span className="text-sm">{getDuration()}</span>
                 </div>
               )}
-
-              <div className="flex items-center text-gray-500">
-                <Plus className="w-4 h-4 mr-2" />
-                <span className="text-xs">
-                  Created {formatDate(trip.createdAt)}
-                </span>
-              </div>
             </div>
 
-            <div className="mt-4 pt-4 border-t border-gray-100">
+            {/* Action Area */}
+            <div className="pt-4 border-t" style={{ borderColor: 'var(--color-border-light)' }}>
               <div className="flex items-center justify-between">
-                <span className="text-sm text-blue-600 font-medium">
+                <span className="text-sm font-medium" style={{ color: 'var(--color-accent)' }}>
                   View & Edit Trip
                 </span>
-                <ChevronRight className="w-4 h-4 text-blue-600" />
+                <svg className="w-4 h-4" style={{ color: 'var(--color-accent)' }} 
+                     fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                </svg>
               </div>
             </div>
           </div>
-        </div>
+        </article>
       </Link>
 
+      {/* Options Menu Button */}
       <button
         onClick={handleMenuToggle}
         disabled={isDeleting}
-        className="absolute top-3 right-3 p-2 bg-white/80 backdrop-blur-sm text-gray-600 hover:bg-white hover:text-gray-800 rounded-full transition-all duration-200 shadow-sm"
+        className="absolute top-4 right-4 p-2 rounded-lg transition-all duration-200 focus-ring"
+        style={{ 
+          backgroundColor: 'var(--color-surface)',
+          color: 'var(--color-text-muted)',
+          border: '1px solid var(--color-border-light)'
+        }}
         title="More options"
       >
         {isDeleting ? (
@@ -149,25 +162,33 @@ export default function TripCard({ trip }: TripCardProps) {
         )}
       </button>
 
+      {/* Dropdown Menu */}
       {showDeleteMenu && (
-        <div className="absolute top-12 right-3 bg-white rounded-lg shadow-lg border border-gray-200 py-2 z-10 min-w-[160px]">
+        <div className="absolute top-14 right-4 surface-elevated py-2 z-10 min-w-[160px]"
+             style={{ border: '1px solid var(--color-border)' }}>
           <button
             onClick={handleDelete}
-            className="w-full px-4 py-2 text-left text-sm text-red-600 hover:bg-red-50 flex items-center"
+            className="w-full px-4 py-2 text-left text-sm hover:bg-red-50 flex items-center gap-2 transition-colors"
+            style={{ color: 'var(--color-error)' }}
           >
-            <Trash2 className="w-4 h-4 mr-2" />
+            <Trash2 className="w-4 h-4" />
             Delete Trip
           </button>
           <button
             onClick={handleCancel}
-            className="w-full px-4 py-2 text-left text-sm text-gray-600 hover:bg-gray-50 flex items-center"
+            className="w-full px-4 py-2 text-left text-sm flex items-center gap-2 transition-colors"
+            style={{ 
+              color: 'var(--color-text-secondary)',
+              backgroundColor: 'transparent'
+            }}
           >
-            <X className="w-4 h-4 mr-2" />
+            <X className="w-4 h-4" />
             Cancel
           </button>
         </div>
       )}
 
+      {/* Backdrop */}
       {showDeleteMenu && (
         <div
           className="fixed inset-0 z-0"

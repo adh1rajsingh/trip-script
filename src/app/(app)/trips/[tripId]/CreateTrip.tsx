@@ -8,8 +8,7 @@ import { useEffect, useMemo, useRef, useState, useTransition, type ReactNode } f
 import { updateTrip } from "@/app/actions/updateTrip";
 import { toggleShareTrip } from "@/app/actions/toggleShare";
 import { useToast } from "@/components/ui/toast";
-import { addExpense, deleteExpense, setCurrencyRate } from "@/app/actions/expenses";
-import DayExpenses from "@/components/DayExpenses";
+import CollaborationPanel from "@/components/CollaborationPanel";
 
 const TripMap = dynamic(() => import("@/components/TripMap"), { ssr: false });
 
@@ -26,10 +25,38 @@ type MapPoint = {
 interface CreateTripProps {
   trip: typeof trips.$inferSelect & {
   itineraryItems: (typeof itineraryItems.$inferSelect)[];
-  dailyBudgets?: Array<{ date: Date; amountCents: number; currency: string }>
-  expenses?: Array<{ id: string; tripId: string; itineraryItemId: string | null; date: Date; amountCents: number; currency: string; category: string; note: string | null; receiptUrl: string | null }>
-  currencyRates?: Array<{ id: string; currency: string; rateToBase: number }>
   };
+  collaborators: Array<{
+    id: string;
+    role: string;
+    user: {
+      id: string;
+      email: string;
+      firstName: string | null;
+      lastName: string | null;
+    };
+    inviter: {
+      email: string;
+      firstName: string | null;
+      lastName: string | null;
+    } | null;
+    invitedAt: Date;
+  }>;
+  activities: Array<{
+    id: string;
+    action: string;
+    entityType: string | null;
+    metadata: string | null;
+    createdAt: Date;
+    user: {
+      email: string;
+      firstName: string | null;
+      lastName: string | null;
+    };
+  }>;
+  isOwner: boolean;
+  currentUserId: string;
+  userRole: "owner" | "editor" | "viewer" | null;
 }
 
 function getDatesRange(startDate: Date, endDate: Date): Date[] {
@@ -48,11 +75,12 @@ function getDatesRange(startDate: Date, endDate: Date): Date[] {
   return dates;
 }
 
-export default function CreateTrip({ trip }: CreateTripProps) {
+export default function CreateTrip({ trip, collaborators, activities, isOwner, currentUserId, userRole }: CreateTripProps) {
   const hasDates = Boolean(trip.startDate && trip.endDate);
   const { showToast } = useToast();
   const [isSaving, startTransition] = useTransition();
   const [editing, setEditing] = useState(false);
+  const canEdit = userRole === "owner" || userRole === "editor";
   const [form, setForm] = useState({
     destination: trip.destination,
     startDate: trip.startDate ? new Date(trip.startDate).toISOString().slice(0, 10) : "",
@@ -132,70 +160,7 @@ export default function CreateTrip({ trip }: CreateTripProps) {
     day: "numeric",
   });
 
-  // Budget summary helpers
-  const budgetsByDay = useMemo(() => {
-    const map = new Map<string, { amountCents: number; currency: string }>();
-    const list = trip.dailyBudgets;
-    if (list && Array.isArray(list)) {
-      for (const b of list) {
-        const d = new Date(b.date);
-        map.set(d.toDateString(), { amountCents: b.amountCents ?? 0, currency: b.currency ?? "USD" });
-      }
-    }
-    return map;
-  }, [trip]);
 
-  const spentByDay = useMemo(() => {
-    const map = new Map<string, number>();
-    for (const item of trip.itineraryItems) {
-      const d = new Date(item.date).toDateString();
-      const add = item.costCents ?? 0;
-      map.set(d, (map.get(d) ?? 0) + add);
-    }
-    return map;
-  }, [trip.itineraryItems]);
-
-  const summary = useMemo(() => {
-    let totalBudget = 0;
-    let totalSpent = 0;
-    let currency = trip.baseCurrency || "USD";
-    if (itineraryDays.length > 0) {
-      const firstBudget = budgetsByDay.get(itineraryDays[0].toDateString());
-      if (firstBudget?.currency) {
-        // Prefer trip base currency, but if not set, fall back to budget currency
-        currency = trip.baseCurrency || firstBudget.currency;
-      }
-    }
-    for (const d of itineraryDays) {
-      const key = d.toDateString();
-      totalBudget += budgetsByDay.get(key)?.amountCents ?? 0;
-      totalSpent += spentByDay.get(key) ?? 0;
-    }
-    return { totalBudget, totalSpent, remaining: totalBudget - totalSpent, currency };
-  }, [itineraryDays, budgetsByDay, spentByDay, trip.baseCurrency]);
-
-  const fmtCurrency = (cents: number) => `${summary.currency} ${(cents / 100).toFixed(2)}`;
-
-  // Expenses + conversion helpers
-  const baseCurrency = trip.baseCurrency || "USD";
-  const rateMap = useMemo(() => {
-    const m = new Map<string, number>();
-    (trip.currencyRates ?? []).forEach((r) => m.set(r.currency.toUpperCase(), r.rateToBase));
-    m.set(baseCurrency.toUpperCase(), 1);
-    return m;
-  }, [trip.currencyRates, baseCurrency]);
-
-  const expensesByDay = useMemo(() => {
-    const map = new Map<string, Array<{ id: string; itineraryItemId: string | null; date: Date; amountCents: number; currency: string; category: string; note: string | null; receiptUrl: string | null }>>();
-    const list = trip.expenses ?? [];
-    for (const e of list) {
-      const key = new Date(e.date).toDateString();
-      const arr = map.get(key) ?? [];
-      arr.push(e);
-      map.set(key, arr);
-    }
-    return map;
-  }, [trip.expenses]);
 
   const getPlacesForDate = (date: Date) => {
     return trip.itineraryItems
@@ -211,17 +176,7 @@ export default function CreateTrip({ trip }: CreateTripProps) {
         latitude: item.latitude ?? null,
         longitude: item.longitude ?? null,
         address: item.address ?? null,
-        costCents: item.costCents ?? null,
-        costCurrency: item.costCurrency ?? null,
       }));
-  };
-
-  const getBudgetForDate = (date: Date) => {
-    const budgets = trip.dailyBudgets ?? [];
-    const day = new Date(date);
-    day.setHours(0, 0, 0, 0);
-    const found = budgets.find((b) => new Date(b.date).toDateString() === day.toDateString());
-    return { amountCents: found?.amountCents ?? 0, currency: found?.currency ?? "USD" };
   };
 
   const initialMapPoints: MapPoint[] = useMemo(() => {
@@ -353,48 +308,36 @@ export default function CreateTrip({ trip }: CreateTripProps) {
             <h1 className="text-4xl font-bold text-gray-900 mb-2">
               {trip.destination}
             </h1>
-            <button onClick={() => setEditing(true)} className="text-sm px-3 py-2 rounded border">Edit</button>
+            {canEdit && (
+              <button onClick={() => setEditing(true)} className="text-sm px-3 py-2 rounded border">Edit</button>
+            )}
           </div>
         )}
         {!editing && <p className="text-lg text-gray-500">Your itinerary awaits ✨</p>}
-        {!editing && (
-          <div className="mt-3 bg-white border rounded-lg p-3 flex items-center gap-6 text-sm">
-            <div>
-              <span className="text-gray-600">Total budget:</span>
-              <span className="ml-2 font-medium">{fmtCurrency(summary.totalBudget)}</span>
-            </div>
-            <div>
-              <span className="text-gray-600">Planned spend:</span>
-              <span className="ml-2 font-medium">{fmtCurrency(summary.totalSpent)}</span>
-            </div>
-            <div>
-              <span className="text-gray-600">Remaining:</span>
-              <span className={`ml-2 font-medium ${summary.remaining < 0 ? "text-red-600" : "text-green-700"}`}>
-                {fmtCurrency(summary.remaining)}
-              </span>
-            </div>
-            <div className="ml-auto flex items-center gap-2">
-              <span className="text-gray-600">Base currency:</span>
-              <span className="inline-flex items-center rounded border px-2 py-0.5 text-[11px] text-gray-700 bg-gray-50 border-gray-200">{baseCurrency}</span>
-            </div>
-          </div>
-        )}
+
         <div className="mt-3 flex items-center gap-3">
-          <label className="inline-flex items-center gap-2 text-sm">
-            <input type="checkbox" checked={isPublic} onChange={(e) => onToggleShare(e.target.checked)} disabled={sharing} />
-            Share publicly
-          </label>
-          {isPublic && shareUrl && (
-            <button
-              type="button"
-              onClick={() => {
-                navigator.clipboard.writeText(`${window.location.origin}${shareUrl}`);
-                showToast({ title: "Link copied", variant: "success" });
-              }}
-              className="text-sm px-3 py-1 rounded border"
-            >
-              Copy link
-            </button>
+          {canEdit && (
+            <>
+              <label className="inline-flex items-center gap-2 text-sm">
+                <input type="checkbox" checked={isPublic} onChange={(e) => onToggleShare(e.target.checked)} disabled={sharing} />
+                Share publicly
+              </label>
+              {isPublic && shareUrl && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    navigator.clipboard.writeText(`${window.location.origin}${shareUrl}`);
+                    showToast({ title: "Link copied", variant: "success" });
+                  }}
+                  className="text-sm px-3 py-1 rounded border"
+                >
+                  Copy link
+                </button>
+              )}
+            </>
+          )}
+          {!canEdit && userRole === "viewer" && (
+            <span className="text-sm text-gray-500 italic">You have view-only access</span>
           )}
           <div className="ml-auto flex items-center gap-2">
             <button
@@ -422,9 +365,6 @@ export default function CreateTrip({ trip }: CreateTripProps) {
           {itineraryDays.map((date) => {
             const [dayName, monthAndDay] = dateFormatter.format(date).split(", ");
             const [month, dayNumberStr] = monthAndDay.split(" ");
-            const dayKey = date.toDateString();
-            const dayExpenses = expensesByDay.get(dayKey) ?? [];
-            const dayPlaces = getPlacesForDate(date).map(p => ({ id: p.id, name: p.name }));
 
             return (
               <div key={date.toISOString()} className="space-y-3">
@@ -435,25 +375,10 @@ export default function CreateTrip({ trip }: CreateTripProps) {
                   month={month}
                   dayNumber={parseInt(dayNumberStr)}
                   initialPlaces={getPlacesForDate(date)}
-                  initialBudgetCents={getBudgetForDate(date).amountCents}
-                  currency={getBudgetForDate(date).currency}
                   onPlaceAdded={handlePlaceAddedToMap}
                   onPlaceDeleted={handlePlaceDeletedFromMap}
                   onReorder={(ids) => handleReorderForDate(date, ids)}
                 />
-                <div className="-mt-1">
-                  <DayExpenses
-                    tripId={trip.id}
-                    date={date}
-                    baseCurrency={baseCurrency}
-                    rateMap={rateMap}
-                    onAdd={addExpense}
-                    onDelete={deleteExpense}
-                    onSetRate={setCurrencyRate}
-                    places={dayPlaces}
-                    expenses={dayExpenses}
-                  />
-                </div>
               </div>
             );
           })}
@@ -504,6 +429,15 @@ export default function CreateTrip({ trip }: CreateTripProps) {
           />
         </div>
       )}
+
+      {/* Collaboration Panel */}
+      <CollaborationPanel
+        tripId={trip.id}
+        collaborators={collaborators}
+        activities={activities}
+        isOwner={isOwner}
+        currentUserId={currentUserId}
+      />
     </div>
   );
 }
